@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="RelayScene" extends="Scene">
+  <interface />
+  <children>
+    <Rectangle width="1920" height="1080" color="0x0b164aff" />
+    <Label id="brand" text="RELAY" translation="[110,85]" width="500" height="90" />
+    <Label id="title" text="Connect to your PS5" translation="[520,365]" width="920" height="90" horizAlign="center" />
+    <Label id="status" text="Roku UI prototype · Streaming backend not yet implemented" translation="[310,525]" width="1300" height="140" horizAlign="center" />
+    <Label id="nav" text="Remote Play     Cloud Streaming     Search     Settings" translation="[380,820]" width="1180" height="100" horizAlign="center" />
+  </children>
+  <script type="text/brightscript" uri="pkg:/components/RelayScene.brs" />
+</component>

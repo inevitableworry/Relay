@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootLayout" android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:paddingTop="20dp" android:paddingBottom="24dp">
+    <ImageView android:id="@+id/iconImageView" android:layout_width="74dp" android:layout_height="48dp"
+        android:src="@drawable/ic_add_manual" android:importantForAccessibility="no"
+        android:layout_marginBottom="18dp" app:tint="#ffffff"/>
+    <TextView android:id="@+id/titleTextView" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:text="Connect using an address"
+        android:textSize="23sp" android:textColor="#ffffff"/>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="Enter the console's IP address or hostname. Choose an existing pairing, or pair the console when you first connect."
+        android:textColor="#c2bfc9" android:textSize="16sp" android:layout_marginTop="12dp"
+        android:layout_marginBottom="28dp"/>
+
+    <com.google.android.material.textfield.TextInputLayout android:id="@+id/hostTextInputLayout"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:hint="@string/hint_regist_host" android:textColorHint="#c2bfc9"
+        app:boxBackgroundMode="outline" app:boxStrokeColor="#ffffff" app:hintTextColor="#ffffff"
+        app:boxCornerRadiusTopStart="6dp" app:boxCornerRadiusTopEnd="6dp"
+        app:boxCornerRadiusBottomStart="6dp" app:boxCornerRadiusBottomEnd="6dp">
+        <com.google.android.material.textfield.TextInputEditText android:id="@+id/hostEditText"
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="60dp"
+            android:inputType="textNoSuggestions|textVisiblePassword" android:singleLine="true"
+            android:textColor="#ffffff" android:imeOptions="actionNext"/>
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout android:id="@+id/registeredHostTextInputLayout"
+        style="@style/MageTheme.TextInputStyle.ExposedDropdownMenu"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="24dp"
+        android:hint="@string/hint_add_manual_regist_host" android:textColorHint="#c2bfc9"
+        app:boxBackgroundMode="outline" app:boxStrokeColor="#ffffff" app:hintTextColor="#ffffff"
+        app:endIconTint="#ffffff" app:boxCornerRadiusTopStart="6dp" app:boxCornerRadiusTopEnd="6dp"
+        app:boxCornerRadiusBottomStart="6dp" app:boxCornerRadiusBottomEnd="6dp">
+        <AutoCompleteTextView android:id="@+id/registeredHostTextView" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:minHeight="60dp" android:inputType="none"
+            android:singleLine="true" android:textColor="#ffffff" android:importantForAutofill="no"/>
+    </com.google.android.material.textfield.TextInputLayout>
+    <TextView android:id="@+id/saveErrorTextView" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:textColor="#ffb4ab" android:textSize="14sp"
+        android:visibility="gone" android:layout_marginTop="16dp" android:accessibilityLiveRegion="polite"/>
+    <com.google.android.material.button.MaterialButton android:id="@+id/saveButton"
+        android:layout_width="200dp" android:layout_height="56dp" android:layout_gravity="end"
+        android:layout_marginTop="30dp" android:text="@string/action_add_manual_save"
+        android:textAllCaps="false" android:textColor="#111111" android:textSize="17sp"
+        app:backgroundTint="#ffffff" app:cornerRadius="48dp"/>
+</LinearLayout>

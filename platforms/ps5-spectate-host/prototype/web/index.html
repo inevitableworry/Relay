@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relay PS5 Host Setup</title><link rel="stylesheet" href="styles.css"><script defer src="app.js"></script></head>
+<body><div class="ambient" aria-hidden="true"><div class="orb"></div></div>
+<header><strong>✦ RELAY</strong><span>PS5 Host Setup · Development Simulator</span></header>
+<main><nav aria-label="Host settings">
+<button data-tab="status" class="selected">Status</button><button data-tab="pair">Pair</button>
+<button data-tab="profiles">Profiles</button><button data-tab="network">Network</button>
+<button data-tab="spectate">Spectate</button><button data-tab="privacy">Privacy</button><button data-tab="updates">Updates</button></nav>
+<div class="content"><h1 id="heading">Status</h1><p id="notice" role="status">Checking local host…</p>
+<section id="status" class="panel"><h2>Host connection</h2><p id="host-status">Checking…</p>
+<dl><dt>PS5 capture</dt><dd>Unavailable</dd><dt>Stream</dt><dd>Disabled</dd><dt>Audio</dt><dd>Disabled</dd></dl></section>
+<section id="pair" class="panel hidden"><h2>Link your local PS5 profile</h2>
+<p>Each PS5 profile requires its own pairing approval. Scan the QR with the trusted device logged into Relay Social.</p>
+<label for="console-name">Console label</label><input id="console-name" maxlength="80" value="My PS5">
+<button id="start-pair" class="primary">Create pairing code</button><div id="pair-output" class="hidden">
+<h3 id="pair-code"></h3><img id="pair-qr" alt="Pairing code QR">
+<a id="pair-url" target="_blank" rel="noopener noreferrer"></a>
+<p>Expires after 10 minutes.</p><button id="check-pair">Check approval</button></div></section>
+<section id="profiles" class="panel hidden"><h2>Profiles</h2><p>Separate hidden IDs and public friend codes are issued for each PS5 local profile. This simulator cannot read the console's real user list, names or avatar files.</p></section>
+<section id="network" class="panel hidden"><h2>Network settings</h2>
+<dl><dt>Social service</dt><dd id="social-origin">Unknown</dd><dt>Control path</dt><dd>HTTPS now, authenticated WSS planned</dd>
+<dt>Live media</dt><dd>WebRTC/SRTP with a TURN or SFU server (not connected)</dd></dl>
+<p>Ordinary users do not require their own Cloudflare account. This localhost simulator has no public listening port.</p></section>
+<section id="spectate" class="panel hidden"><h2>Live spectate</h2>
+<p>Video and game audio capture will require a separate compatible jailbroken PS5 payload and the active console owner's approval. No streaming is available now.</p>
+<button disabled>Start stream (not available)</button></section>
+<section id="privacy" class="panel hidden"><h2>Privacy</h2>
+<label class="toggle"><input type="checkbox" id="sync"> Future profile metadata sync</label>
+<label class="toggle"><input type="checkbox" id="friends"> Friends can request spectating (approval still required)</label>
+<label class="toggle"><input type="checkbox" disabled> Capture video or audio (not implemented)</label>
+<button id="save-privacy" class="primary">Save settings</button>
+<p>MAC addresses never act as password reset credentials.</p></section>
+<section id="updates" class="panel hidden"><h2>Updates</h2>
+<p>Signed host payload updates require a configured update server. This simulator does not install firmware or a PS5 payload.</p></section>
+</div></main>
+<div class="auth" id="auth-overlay"><div class="auth-card"><h2>Local setup PIN</h2>
+<p>Enter the temporary PIN printed by the local simulator terminal.</p>
+<label for="setup-pin">PIN</label><input id="setup-pin" type="password" inputmode="numeric" autocomplete="off">
+<button id="unlock" class="primary">Unlock setup controls</button></div></div>
+<footer>Relay PS5 control-plane simulator — no game capture, no PSN credentials, no public listener</footer>
+</body></html>

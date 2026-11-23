@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "verified": {
+    "3ds": {
+      "source": "platforms/3ds/source/main.c",
+      "sha256": "717c150f956e93e301a1d89a253602cdc1682949d618b471202f30de08791070",
+      "evidence": [
+        "docs/release-validation/media/Relay-3DS-v0.1.0-menu.png",
+        "docs/release-validation/media/Relay-3DS-v0.1.0-menu.gif"
+      ],
+      "scope": "Animated main menu and local bottom-screen navigation/keyboard verified with Azahar 2126.2; game streaming unimplemented",
+      "hardware": "Original 3DS and New 3DS emulator profiles; physical device not verified"
+    }
+  },
+  "not_yet_verified_for_release": [
+    "android-mobile", "android-tv", "android-bravia", "android-dualscreen", "android-other",
+    "vita", "switch", "windows", "xbox", "apple", "tizen", "roku", "steamos"
+  ]
+}

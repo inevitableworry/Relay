@@ -1,0 +1,44 @@
+@font-face { font-family: RelayInter; src: url('../Assets/inter-variable.ttf'); }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; width:100%; height:100%; overflow:hidden; background:#030307; color:#fafaff; font-family:RelayInter,'Segoe UI',sans-serif; }
+button, input { font-family:inherit; }
+button { cursor:pointer; color:inherit; outline: none; }
+button:focus, button.focused { outline:3px solid rgba(240,239,255,.95); outline-offset:4px; }
+#sphere { position:fixed; inset:0; width:100%; height:100%; display:block; z-index:0; }
+.scene {position:absolute;inset:0;z-index:1;pointer-events:none;}
+.scene button {pointer-events:auto;}
+.topbar {position:absolute;top:7.2%;left:4.5%;right:4.2%;height:10%;display:flex;align-items:center;justify-content:space-between;}
+.tabs {display:block;position:relative;width:17.7vw;height:5.05vw;max-height:95px;min-height:48px;}
+.tabs #nav-artwork {width:100%;height:100%;object-fit:fill;pointer-events:none;}
+.tab {position:absolute;top:0;width:33.333%;height:100%;background:transparent;border:0;border-radius:100px;}
+.tab:nth-of-type(1) {left:0;}
+.tab:nth-of-type(2) {left:33.333%;}
+.tab:nth-of-type(3) {left:66.666%;}
+.tab:hover,.tab:focus {background:rgba(216,212,228,.12);}
+.indicators {display:flex;align-items:center;gap:2.4vw;font-size:1.65vw;}
+.indicators img {width:2.2vw;height:2.2vw;object-fit:contain;}
+.indicators button {border:0;background:transparent;width:3.6vw;height:3.6vw;min-width:42px;min-height:42px;display:flex;justify-content:center;align-items:center;}
+.indicators button img {width:55%;height:55%;}
+.home {position:absolute;left:7.3%;top:34%;width:60%;}
+.home h1 {font-size:3.0vw;font-weight:470;margin:0 0 1.3vw 0;letter-spacing:-.02em;}
+.home p {font-size:1.62vw;color:#c5c1d7;letter-spacing:.005em;margin:0;}
+.home-actions {position:absolute;right:5%;bottom:8%;min-width:17%;display:flex;justify-content:flex-end;}
+.action-primary {font-size:1.75vw;color:#201c35;background:#f0f0ff;border:0;border-radius:5px;padding:1vw 3.5vw;font-weight:550;}
+.footer {position:absolute;left:7.3%;right:5%;bottom:8%;display:flex;align-items:center;justify-content:space-between;font-size:1.35vw;color:#dedbed;}
+.quick-menu {position:fixed;top:0;bottom:0;right:0;width:37%;background:rgba(26,28,51,.97);z-index:3;padding:7% 3.5% 5%;box-shadow:-30px 0 160px rgba(0,0,0,.55);transition:transform .29s ease,opacity .25s;}
+.quick-menu.hidden {transform:translateX(110%);opacity:0;pointer-events:none;}
+.quick-menu h2 {font-size:2vw;margin:0 0 2em;font-weight:510;}
+.menu-item {display:block;width:100%;padding:1vw 1.3vw;margin:.9vw 0;border:0;text-align:left;background:transparent;border-radius:12px;font-size:1.55vw;}
+.menu-item:hover,.menu-item:focus,.menu-item.selected {background:rgba(150,142,184,.28);}
+.dialog {position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:5;display:flex;align-items:center;justify-content:center;}
+.dialog.hidden {display:none;}
+.dialog-inner {background:rgba(25,27,49,.98);border:1px solid rgba(160,151,195,.65);width:66%;max-height:88%;overflow-y:auto;padding:3.3vw;border-radius:12px;box-shadow:0 0 100px rgba(0,0,0,.4);}
+.dialog h2 {font-size:2.1vw;margin:0 0 1.7vw;}
+.dialog p {color:#d9d7e7;font-size:1.35vw;line-height:1.65;}
+.dialog label {font-size:1.25vw;color:#d9d7e7;display:block;margin:.7vw 0;}
+.dialog input {color:#fff;background:#383955;border:1px solid #78768d;border-radius:8px;padding:.85vw 1.1vw;font-size:1.35vw;width:100%;}
+.dialog-actions {display:flex;justify-content:flex-end;gap:1vw;margin-top:2vw;}
+.dialog-actions button {font-size:1.3vw;padding:.8vw 1.8vw;border:1px solid #858397;border-radius:6px;background:transparent;}
+.dialog-actions .action-primary {background:#f0f0ff;border:0;color:#1e1833;}
+.subtle {color:#aaa5c1 !important;}
+@media(max-width:1024px){.home h1{font-size:4vw;}.home p{font-size:2.3vw;}.indicators{font-size:2vw}.footer{font-size:1.55vw}.tabs{width:26vw;height:7.4vw}.dialog h2{font-size:3vw}.dialog p,.dialog label,.dialog input{font-size:2vw}.dialog-actions button{font-size:2vw}}

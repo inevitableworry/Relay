@@ -1,0 +1,264 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'kotlin-parcelize'
+    id 'com.google.devtools.ksp'
+}
+
+def rootCMakeLists = "../../CMakeLists.txt"
+def rootCMakeListsContent = file(rootCMakeLists).text
+static def grepVersionComponent(content, varname) {
+    def match = content =~ /set\($varname ([0-9]+)\)/
+    if(!match.find())
+        throw new GradleException("Failed to find $varname in CMakeLists.txt")
+    return match.group(1)
+}
+def chiakiVersionMajor = grepVersionComponent(rootCMakeListsContent, "CHIAKI_VERSION_MAJOR")
+def chiakiVersionMinor = grepVersionComponent(rootCMakeListsContent, "CHIAKI_VERSION_MINOR")
+def chiakiVersionPatch = grepVersionComponent(rootCMakeListsContent, "CHIAKI_VERSION_PATCH")
+def chiakiVersion = "$chiakiVersionMajor.$chiakiVersionMinor.$chiakiVersionPatch"
+println("Determined Chiaki Version: $chiakiVersion")
+
+android {
+    namespace "com.metallic.chiaki"
+    compileSdk 35
+    ndkVersion "28.2.13676358"
+
+    defaultConfig {
+        applicationId "com.portalstyle.remoteplay"
+        minSdk 24
+        targetSdk 35
+        // Private update host is supplied by the build environment, never source.
+        def updateHost = System.getenv('RELAY_UPDATE_HOST') ?: 'updates.example.invalid'
+        if (!(updateHost ==~ /[a-zA-Z0-9.-]+/)) throw new GradleException('Invalid RELAY_UPDATE_HOST')
+        buildConfigField 'String', 'RELAY_UPDATE_HOST', '"' + updateHost + '"'
+        versionCode 37
+        versionName "0.3.23-relay"
+        ndk {
+            // Both connected test devices use 64-bit ARM; keep this
+            // development APK focused on the verified device architecture.
+            abiFilters 'arm64-v8a'
+        }
+        externalNativeBuild {
+            cmake {
+                arguments "-DCHIAKI_ENABLE_TESTS=OFF",
+                        "-DCHIAKI_ENABLE_CLI=OFF",
+                        "-DCHIAKI_ENABLE_GUI=OFF",
+                        "-DCHIAKI_ENABLE_SETSU=OFF",
+                        "-DCHIAKI_ENABLE_ANDROID=ON",
+                        "-DCHIAKI_ENABLE_FFMPEG_DECODER=OFF",
+                        "-DCHIAKI_ENABLE_PI_DECODER=OFF",
+                        "-DCHIAKI_LIB_ENABLE_OPUS=OFF",
+                        "-DCHIAKI_LIB_OPENSSL_EXTERNAL_PROJECT=ON",
+                        "-DCHIAKI_LIB_JSONC_EXTERNAL_PROJECT=ON",
+                        "-DCHIAKI_LIB_MINIUPNPC_EXTERNAL_PROJECT=ON",
+                        "-DCHIAKI_ENABLE_STEAM_SHORTCUT=OFF",
+                        "-DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF",
+                        "-DANDROID_STL=c++_shared",
+                        "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
+                        "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
+                if(System.getenv('CHIAKI_HOST_PYTHON')) {
+                    arguments "-DPYTHON_EXECUTABLE=${System.getenv('CHIAKI_HOST_PYTHON')}"
+                }
+            }
+        }
+    }
+
+    flavorDimensions 'device'
+    productFlavors {
+        mobile {
+            dimension 'device'
+        }
+        tv {
+            dimension 'device'
+            applicationIdSuffix '.tv'
+            versionNameSuffix '-tv'
+            manifestPlaceholders = [relayTvBuild: 'true']
+        }
+        shield {
+            dimension 'device'
+            applicationIdSuffix '.shield'
+            versionNameSuffix '-shield'
+            // 2019 cylindrical SHIELD TV requires 32-bit ARM. Other SHIELD TV
+            // boxes, including Pro models, can use native 64-bit ARM.
+            ndk {
+                abiFilters 'armeabi-v7a', 'arm64-v8a'
+            }
+        }
+        googleTv {
+            dimension 'device'
+            applicationIdSuffix '.googletv'
+            versionNameSuffix '-googletv'
+            // Universal Google TV: accept both 32-bit and 64-bit ARM runtimes.
+            ndk {
+                abiFilters 'armeabi-v7a', 'arm64-v8a'
+            }
+        }
+        bravia8ii {
+            dimension 'device'
+            applicationIdSuffix '.bravia8ii'
+            versionNameSuffix '-bravia8ii'
+            // Sony BRAVIA 8 II (XR80M2), Google TV / Android 12.
+            // Ship 32- and 64-bit ARM until physical-device ABI inspection.
+            minSdk 31
+            ndk {
+                abiFilters 'armeabi-v7a', 'arm64-v8a'
+            }
+            manifestPlaceholders = [relayTvBuild: 'true']
+        }
+        retroid {
+            dimension 'device'
+            applicationIdSuffix '.retroid'
+            versionNameSuffix '-retroid'
+            // One package for legacy Pocket 3+ and newer 64-bit Retroid
+            // handhelds. Some vendor Android images are 32-bit only.
+            ndk {
+                abiFilters 'armeabi-v7a', 'arm64-v8a'
+            }
+            manifestPlaceholders = [relayTvBuild: 'false']
+        }
+        razerEdge {
+            dimension 'device'
+            applicationIdSuffix '.razeredge'
+            versionNameSuffix '-razer-edge-5g'
+            // The Snapdragon G3x Gen 1 / Android device uses ARM64.
+            ndk {
+                abiFilters 'arm64-v8a'
+            }
+            manifestPlaceholders = [relayTvBuild: 'false']
+        }
+        aynThor {
+            dimension 'device'
+            applicationIdSuffix '.aynthor'
+            versionNameSuffix '-ayn-thor'
+            // AYN Thor's Android 13 implementation exposes two distinct
+            // displays. The upper PS stream remains independent of the
+            // opt-in lower-screen control panel.
+            minSdk 33
+            ndk {
+                abiFilters 'arm64-v8a'
+            }
+            manifestPlaceholders = [relayTvBuild: 'false']
+        }
+        dualScreen {
+            dimension 'device'
+            applicationIdSuffix '.dualscreen'
+            versionNameSuffix '-dual-screen-universal'
+            // Universal Android secondary-display build. Detect runtime
+            // DisplayManager Presentation displays; no Thor vendor dependency.
+            ndk { abiFilters 'armeabi-v7a', 'arm64-v8a' }
+            manifestPlaceholders = [relayTvBuild: 'false']
+        }
+        metaQuest {
+            dimension 'device'
+            applicationIdSuffix '.quest'
+            versionNameSuffix '-quest-panel'
+            // Horizon OS Quest 2/Pro/3/3S: 2D app-in-space window only.
+            // An immersive VR/OpenXR app needs a separate renderer, consent
+            // and store-review process; this flavor does not pretend to be VR.
+            minSdk 29
+            ndk {
+                abiFilters 'arm64-v8a'
+            }
+            manifestPlaceholders = [relayTvBuild: 'false']
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+        viewBinding true
+        prefab true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+        freeCompilerArgs += "-opt-in=kotlin.ExperimentalUnsignedTypes"
+    }
+
+    externalNativeBuild {
+        cmake {
+            version "3.22.1"
+            path rootCMakeLists
+        }
+    }
+
+    signingConfigs {
+        release
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    Properties properties = new Properties()
+    def propertiesFile = file("../local.properties")
+    if (propertiesFile.exists()) {
+        properties.load(propertiesFile.newDataInputStream())
+    }
+
+    if(properties.containsKey("chiakiKeystore")) {
+        println("Enabling Local Signing")
+        buildTypes.release.signingConfig = signingConfigs.release
+        buildTypes.debug.signingConfig = signingConfigs.release
+        signingConfigs.release.storeFile = file(properties.get("chiakiKeystore"))
+        signingConfigs.release.storePassword = properties.get("chiakiKeystorePW")
+        signingConfigs.release.keyAlias = properties.get("chiakiKeyAlias")
+        signingConfigs.release.keyPassword = properties.get("chiakiKeyPW")
+    } else {
+        println("Signing not enabled")
+    }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation libs.activity.ktx
+    implementation libs.appcompat
+    implementation libs.core.ktx
+    implementation libs.constraintlayout
+    implementation libs.recyclerview
+    implementation libs.preference.ktx
+    implementation libs.material
+
+    implementation libs.lifecycle.viewmodel.ktx
+    implementation libs.lifecycle.livedata.ktx
+
+    implementation libs.coroutines.android
+
+    implementation libs.room.runtime
+    ksp libs.room.compiler
+    implementation libs.room.ktx
+
+    implementation libs.moshi
+    ksp libs.moshi.kotlin.codegen
+
+    implementation libs.oboe
+
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+
+    // On-device OCR/translation for a user-consented VIDEO-SURFACE-ONLY crop.
+    // No MediaProjection, accessibility capture, Relay UI OCR, or cloud
+    // translation service. Translation models download only on Wi-Fi.
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
+    implementation 'com.google.mlkit:text-recognition-japanese:16.0.1'
+    implementation 'com.google.mlkit:text-recognition-chinese:16.0.1'
+    implementation 'com.google.mlkit:text-recognition-korean:16.0.1'
+    implementation 'com.google.mlkit:text-recognition-devanagari:16.0.1'
+    implementation 'com.google.mlkit:language-id:17.0.6'
+    implementation 'com.google.mlkit:translate:17.0.3'
+
+    testImplementation 'junit:junit:4.13.2'
+    // Android's org.json methods are stubbed in local JVM tests; use the real parser.
+    testImplementation 'org.json:json:20240303'
+}

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="https://relay.example.invalid/tizen" version="0.1.0" viewmodes="maximized">
+  <tizen:application id="RLYTV2026A.Relay" package="RLYTV2026A" required_version="6.0" />
+  <name>Relay</name>
+  <description>Relay Remote Play — Tizen navigation preview. Streaming unavailable.</description>
+  <icon src="icon.png" />
+  <content src="index.html" />
+  <feature name="http://tizen.org/feature/screen.size.all" />
+  <tizen:profile name="tv-samsung" />
+  <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable" encryption="disable" install-location="auto" />
+</widget>

@@ -1,0 +1,18 @@
+# Eden Nightly NRO attempt — Samsung Galaxy Tab S11 Ultra
+
+**Date:** November 23, 2026. **Android package:** `dev.eden.eden_emulator.nightly`, reported `versionName=0460380`. The tablet was connected by wireless ADB. The NRO was compiled natively with devkitA64/libnx and structurally validated as a Switch NRO (`NRO0` at offset 16).
+
+1. Pushed `platforms/switch1/relay-switch1.nro` to `/sdcard/Download/Relay-Switch1.nro` and `/sdcard/Download/RelaySwitchTest/Relay-Switch1.nro` on the tablet.
+2. Opened Eden Nightly and used **Folder** to select `Download/RelaySwitchTest`. Android SAF granted Eden access, and the folder was added to its library; no existing game folders or emulator configuration were removed.
+3. Eden attempted to scan the file but recorded `Common.Filesystem ... Error mmap'ing file: content://com.android.externalstorage.documents/tree/primary%3ADownload%2FRelaySwitchTest/.../Relay-Switch1.nro`.
+4. Attempted a direct Android `ACTION_VIEW` launch using the granted tree URI and its local app-private file URI. Eden's log recorded `[EmulationFragment] No game found in arguments or intent` and returned to its library. Direct `-f 1` with a shell-owned URI also failed because Android forbids the shell from granting itself arbitrary SAF permissions.
+5. The current Eden session did **not** execute the `.nro`. There are **no verified FPS, screenshots of Relay running in Eden, audio-playback results, or confirmed animations**. Do not report an emulator pass. The failure occurs during opening/launch selection rather than during execution of Relay's native renderer.
+
+Evidence: `docs/device-results/eden-relay-test-log.txt` (Eden application log) and `docs/device-results/eden-open.xml`/`eden-picker.xml` (UI inspection). The NRO is still present in the tablet's dedicated test folder for a future homebrew-capable Eden build. The original tablet content and game files were left intact.
+The final Eden library screen after the failed attempt is also captured at `docs/device-results/eden-switch1-load-result.png`. It is evidence of the emulator returning to its library, **not** a screenshot of Relay actually running.
+
+Related upstream issue: Eden PR #4693 (November 2026) describes basic homebrew menu support as WIP and states that launching homebrew from it still freezes. That upstream limitation may explain why testing an `.nro` is unreliable even when a build is valid.
+
+**Retest after final RomFS/icon packaging:** Rebuilt `relay-switch1.nro` as a 23,758,848-byte package with original audio, Inter font, vector-derived images, and NACP icon. SHA-256: `8c1bcbe91f875f663a077317bc4dbbc1c74a1a734d5844dfeb8f1d06b532da10`. Uploaded the new binary to the previously granted `RelaySwitchTest` folder. Retried direct launch using `android.nfc.action.TECH_DISCOVERED` and the persisted SAF tree URI; Eden again reported `Error mmap'ing file`, then `[EmulationFragment] No game found in arguments or intent` and returned to its library. This is a **failed emulator load**, not a failed Relay game-session test or a successful emulator execution.
+
+**NSP installer check:** Used Eden's actual **Manage Eden data → Install game content → Import** flow, chose the independent Relay native build packaged as `Relay-Switch1-ExeFS-Development.nsp`, and received **“Error installing file(s) to NAND”** (1 installation error). This is expected because the file is a devkitPro PFS0 ExeFS development container without installable-title NCAs. Saved `docs/device-results/relay-nsp-eden-install-failed.png` and `docs/device-results/eden-nsp-install-log.txt`. The full current NRO also retains a read-only PBS `/config.json` connectivity probe; live playback, sound and UI/animation runtime were never executed in Eden.

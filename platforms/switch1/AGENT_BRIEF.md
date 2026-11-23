@@ -1,0 +1,7 @@
+﻿# Relay Nintendo Switch 1 Homebrew Agent Brief
+
+User asked: build a Nintendo Switch V1 (non-OLED) Atmosphere/libnx homebrew version of Relay while changing absolutely nothing about the established Relay UI, sounds or animations. Target a standalone `.nro`, not NSP and do not touch console firmware or payloads.
+
+Owned directory for implementation: platforms/switch1/** ONLY. Do not modify any existing Android, TV, iOS, UI asset, audio, or animation files. Use existing assets only as unchanged source references; if a source format cannot be rendered on Switch, document exact parity blocker rather than substituting new artwork/sound/animation. Before writing implementation, audit `android/app/src/main/java/com/metallic/chiaki/main/PortalBackdropView.kt`, PortalUi.kt and their resources/animations/audio. Record an asset parity inventory with source path/hash and exact transport requirements. Use installed devkitPro at C:\devkitPro, devkitA64/libnx/SDL2 where present. Build a real NRO if toolchain permits and verify artifacts; otherwise produce compilable scaffold and accurate blockers. Do not claim PS5 streaming is working unless real decoder, pairing, input, transport are implemented and validated. No changing the user's Switch console and no deployment without validation. Keep scope isolated.
+
+Work should include: Makefile, source, build instructions, parity spec, exact build outputs; use tools freely in platforms/switch1. Finish by reporting files and validation.

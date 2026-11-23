@@ -1,0 +1,5 @@
+<!-- Keep the platform's short starting window black. PortalBootActivity draws
+     the correctly scaled PS logo, avoiding a fixed Android icon-size jump. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#00000000"/>
+</shape>

@@ -1,0 +1,30 @@
+Portal home menu recording — source and processing
+
+User-selected source: https://www.youtube.com/watch?v=0AgEeTOz8pY
+Title: PlayStation Portal Home Screen Music
+Uploader: kontraband; upload metadata: 2026-09-05.
+Source description attributes the original recording to Kamisato Tadashi:
+https://www.youtube.com/watch?v=QVSNJLEemIg (2024-10-14).
+It also credits Larry Biroute's title/upload:
+https://www.youtube.com/watch?v=EJjhj_ulZw8.
+
+portal_home_loop.pcm uses matching interior passages of the requested recording
+at 19.7540625 and 83.750604167 seconds, joined by a phase-aligned 250 ms
+constant-sum raised-cosine splice. The quiet recorded outro is omitted.
+Result: 3,071,834 frames / 63.996541667 seconds, 48 kHz stereo signed 16-bit
+little-endian PCM. The app feeds this repeatedly through one continuous
+AudioTrack, including file wraps within a single output buffer.
+SHA-256: 4b74bdc9f080dd6330aa52cc621470975249f119709972b9c2f0ac68c904f7af
+Reproduce with docs/portal-reference/audio/prepare_matched_loop.py.
+No music or sound effects were generated. Measurements and exact source
+sample selections are in matched-loop-preparation.json alongside that script.
+
+Original PlayStation music and recording rights remain with their respective
+owners. No open-source license grant for this recording was verified. This
+asset is included for the user's requested personal build; the app code's AGPL
+license does not relicense the music. Source metadata, originals, processing
+script and measurement report are retained under docs/portal-reference/audio.
+
+Full-track automated speech detection/transcription found no speech. Literal
+listening was unavailable to the research agent. Navigation sound files have
+not been included because clean isolated recordings were not verified.

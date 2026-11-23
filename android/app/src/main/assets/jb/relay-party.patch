@@ -1,0 +1,1082 @@
+diff --git a/payload/build.ps1 b/payload/build.ps1
+--- a/payload/build.ps1
++++ b/payload/build.ps1
+@@ -157,10 +157,11 @@
+   @('platform/ps5/main.c', 'platform/ps5/offset_dump.c', 'platform/ps5/module_dump.c',
+     'platform/ps5/request_template.c', 'platform/ps5/worker.c', 'platform/ps4/worker/client.c',
+     'platform/ps4/worker/remote.c', 'common/process/inject.c',
+-    'common/http/server.c', 'common/input/controller.c')
++    'common/http/server.c', 'common/input/controller.c', 'common/input/party.c')
+ }
+ if ($Kind -eq 'stream' -and $Ps5Controller -eq 1) {
+   $sourceNames += 'platform/ps5/controller.c'
++  $sourceNames += 'platform/ps5/party_profiles.c'
+ }
+ $sources = $sourceNames | ForEach-Object {
+   if ($_ -like 'tools/*') { Join-Path $repoRoot $_ } else { Join-Path $PSScriptRoot ('src/' + $_) }
+diff --git a/payload/build.sh b/payload/build.sh
+--- a/payload/build.sh
++++ b/payload/build.sh
+@@ -221,7 +221,7 @@
+       sources+=("$root/src/platform/ps4/capture/remote.c" "$root/src/platform/ps4/worker/client.c" "$root/src/platform/ps4/worker/remote.c" "$root/src/platform/ps4/worker/boot.c")
+       if [[ $worker_boot == 1 ]]; then sources+=("$root/src/platform/ps4/capture/export_reader.c"); fi
+     fi
+-    sources+=("$root/src/platform/ps4/system/control.c" "$root/src/common/process/inject.c" "$root/src/common/http/server.c" "$root/src/common/input/controller.c" "$root/src/common/diagnostics/problem_log.c" "$root/src/platform/ps4/system/credentials.c")
++    sources+=("$root/src/platform/ps4/system/control.c" "$root/src/common/process/inject.c" "$root/src/common/http/server.c" "$root/src/common/input/controller.c" "$root/src/common/input/party.c" "$root/src/common/diagnostics/problem_log.c" "$root/src/platform/ps4/system/credentials.c")
+     if [[ $dynamic_layout == 1 ]]; then sources+=("$root/src/platform/ps4/system/layout.c" "$root/src/platform/ps4/system/layout_runtime.c"); fi
+     if [[ $admission_probe == 1 || $low_memory == 1 || $encoder_state == 1 ]]; then
+       sources+=("$root/src/platform/ps4/diagnostics/snapshot.c" "$root/src/platform/ps4/diagnostics/admission.c")
+@@ -235,13 +235,16 @@
+       "$root/src/platform/ps5/worker.c"
+       "$root/src/platform/ps4/worker/client.c" "$root/src/platform/ps4/worker/remote.c"
+       "$root/src/common/process/inject.c"
+-      "$root/src/common/http/server.c" "$root/src/common/input/controller.c")
++      "$root/src/common/http/server.c" "$root/src/common/input/controller.c" "$root/src/common/input/party.c")
+     for offset_source in "$root"/src/platform/ps5/offset/*.c; do
+       sources+=("$offset_source")
+     done
+-    defines=("-DPBS_PS5_CONTROLLER=$ps5_controller")
++    # Safe Relay default: 1080p capture. Do not inherit upstream's 1440p
++    # default or a previously selected 2160p mode during payload refresh.
++    defines=("-DPBS_PS5_CONTROLLER=$ps5_controller" "-DPBS_PS5_DEFAULT_1080P=1")
+     if [[ $ps5_controller == 1 ]]; then
+       sources+=("$root/src/platform/ps5/controller.c")
++      sources+=("$root/src/platform/ps5/party_profiles.c")
+     fi
+   fi
+   filename=pbs.elf
+@@ -338,7 +341,27 @@
+   if [[ $platform == ps4 && $native_source == 1 ]]; then
+     filename=${filename%.elf}-nativesource.elf
+   fi
+-  "$compiler" "${includes[@]}" "$optimization" "${debug_flags[@]}" -Wall -Wextra -Wno-unused-parameter "${defines[@]}" "${sources[@]}" -o "$out/$filename"
++  # Match the PS5 runtime dependencies of the earlier native-pad ELF that
++  # successfully initialized scePadInit and created/deleted a virtual device
++  # on firmware 10.01. The SDK's default compiler wrapper links only libc/net:
++  # dropping the other dependencies changes which PS5 modules are loaded
++  # before controller initialization.
++  if [[ $platform == ps5 ]]; then
++    platform_libraries=(-lSceRegMgr -lSceUserService -lSceRemoteplay
++      -lSceSystemService -lSceAudioOut)
++    for library in "${platform_libraries[@]}"; do
++      name=${library#-l}
++      if [[ ! -f "$sdk/target/lib/lib$name.so" ]]; then
++        echo "Missing required PS5 runtime library: $library" >&2
++        exit 2
++      fi
++    done
++    "$compiler" "${includes[@]}" "$optimization" "${debug_flags[@]}" -Wall -Wextra \
++      -Wno-unused-parameter "${defines[@]}" "${sources[@]}" \
++      -Wl,--no-as-needed "${platform_libraries[@]}" -o "$out/$filename"
++  else
++    "$compiler" "${includes[@]}" "$optimization" "${debug_flags[@]}" -Wall -Wextra -Wno-unused-parameter "${defines[@]}" "${sources[@]}" -o "$out/$filename"
++  fi
+   if [[ $platform == ps5 ]]; then
+     python3 "$root/../tools/verify_ps5_elf.py" "$out/$filename"
+   fi
+diff --git a/payload/src/common/http/controller_routes.h b/payload/src/common/http/controller_routes.h
+--- a/payload/src/common/http/controller_routes.h
++++ b/payload/src/common/http/controller_routes.h
+@@ -163,7 +163,10 @@
+ 
+ static void controller_reply_status(int fd) {
+   pbs_input_status status;
+-  pbs_input_get_status(&status);
++  if (pbs_input_get_status(&status)) {
++    profile_reply(fd,503,"Controller initialization in progress or unresponsive");
++    return;
++  }
+ 
+   char body[256];
+   int length = snprintf(body, sizeof body,
+diff --git a/payload/src/common/http/party_routes.h b/payload/src/common/http/party_routes.h
+new file mode 100644
+--- /dev/null
++++ b/payload/src/common/http/party_routes.h
+@@ -0,0 +1,118 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++/* Included after controller_routes.h: shares its header and state validators. */
++#include "common/input/party.h"
++#include "common/input/party_profiles.h"
++/* Serialize newly arriving clients so the primary native pad always belongs to
++ * the first successful connection; later clients use guest pads in order. */
++static pthread_mutex_t party_admission_lock = PTHREAD_MUTEX_INITIALIZER;
++static void party_reply_status(int fd) {
++  pbs_input_status primary;
++  pbs_party_slot_status guest[PBS_PARTY_GUESTS];
++  if (pbs_input_get_status(&primary) || pbs_party_get_status(guest)) {
++    profile_reply(fd,503,"A native controller operation is still in progress");
++    return;
++  }
++  const int connected=(primary.connected?1:0)+guest[0].connected+guest[1].connected+guest[2].connected;
++  char body[768];
++  int n=snprintf(body,sizeof body,
++    "{\"version\":1,\"max_players\":4,\"connected\":%d,\"players\":["
++    "{\"player\":1,\"connected\":%s,\"cleanup_required\":%s,\"prompt_sent\":%s},"
++    "{\"player\":2,\"connected\":%s,\"cleanup_required\":%s,\"prompt_sent\":%s},"
++    "{\"player\":3,\"connected\":%s,\"cleanup_required\":%s,\"prompt_sent\":%s},"
++    "{\"player\":4,\"connected\":%s,\"cleanup_required\":%s,\"prompt_sent\":%s}]}",
++    connected,primary.connected?"true":"false",primary.cleanup_required?"true":"false",
++    primary.connected?"true":"false",
++    guest[0].connected?"true":"false",guest[0].cleanup_required?"true":"false",
++    guest[0].user_prompt_sent?"true":"false",
++    guest[1].connected?"true":"false",guest[1].cleanup_required?"true":"false",
++    guest[1].user_prompt_sent?"true":"false",
++    guest[2].connected?"true":"false",guest[2].cleanup_required?"true":"false",
++    guest[2].user_prompt_sent?"true":"false");
++  if (n>0 && n<(int)sizeof body) reply(fd,"application/json",body,(size_t)n);
++  else profile_reply(fd,503,"Player status is unavailable");
++}
++static void party_route(int fd,const char *method,const char *path,
++                        const char *request,size_t received) {
++  if (!strcmp(method,"GET") && !strcmp(path,"/party/status")) {
++    party_reply_status(fd); return;
++  }
++  if (!strcmp(method,"GET") && (!strcmp(path,"/party/users") ||
++                                !strncmp(path,"/party/avatar?user_id=",22))) {
++    controller_request auth;const char *error=NULL;
++    int rc=controller_parse_request(request,&auth,&error);
++    if(rc!=200) {profile_reply(fd,rc,error);return;}
++    if(!auth.has_token || (!pbs_input_owns(auth.token) && !pbs_party_owns(auth.token))) {
++      profile_reply(fd,403,"An active player token is required");return;
++    }
++    if(!strcmp(path,"/party/users")) {
++      char body[1024];
++      int len=pbs_party_profiles_json(body,sizeof body);
++      if(len<0) profile_reply(fd,501,"Console user profiles are unavailable");
++      else reply(fd,"application/json",body,(size_t)len);
++      return;
++    }
++    const char *number=path+22;
++    if(!*number) {profile_reply(fd,400,"Invalid user ID");return;}
++    for(const char *p=number;*p;p++) if(*p<'0'||*p>'9') {
++      profile_reply(fd,400,"Invalid user ID");return;
++    }
++    errno=0;char *tail=NULL;
++    unsigned long id=strtoul(number,&tail,10);
++    if(errno || *tail || id==0 || id>INT32_MAX) {
++      profile_reply(fd,400,"Invalid user ID");return;
++    }
++    unsigned char *bytes=NULL;size_t count=0;int mime=0;
++    if(pbs_party_avatar((int32_t)id,&bytes,&count,&mime)) {
++      profile_reply(fd,404,"Avatar is unavailable");return;
++    }
++    reply(fd,mime==1?"image/png":"image/jpeg",bytes,count);
++    free(bytes);return;
++  }
++  if (strcmp(method,"POST")) {profile_reply(fd,405,"Use POST for party controller commands");return;}
++  int connecting=!strcmp(path,"/party/connect");
++  int disconnecting=!strcmp(path,"/party/disconnect");
++  if (!connecting && !disconnecting && strcmp(path,"/party/state")) {
++    profile_reply(fd,404,"Unknown party command");return;
++  }
++  controller_request parsed;const char *error=NULL;
++  int status=controller_parse_request(request,&parsed,&error);
++  if (status!=200) {profile_reply(fd,status,error);return;}
++  if ((connecting || disconnecting) && parsed.content_length) {
++    profile_reply(fd,400,"Unexpected controller body");return;
++  }
++  if (!connecting && (!parsed.has_token || strlen(parsed.token)!=32)) {
++    profile_reply(fd,403,"Player token required");return;
++  }
++  if (connecting) {
++    char token[PBS_INPUT_TOKEN_SIZE];unsigned player=0;
++    /* Keep all later clients responsive when the very first native Pad
++     * registration hangs inside libScePad. No duplicate native add occurs. */
++    if (pthread_mutex_trylock(&party_admission_lock)) {
++      profile_reply(fd,503,"Another player controller is still initializing");
++      return;
++    }
++    status=pbs_input_connect(token);
++    if(status==200) {
++      player=1;
++    } else if(status==409) {
++      pbs_input_status primary;
++      if (!pbs_input_get_status(&primary) &&
++          primary.connected && !primary.cleanup_required)
++        status=pbs_party_connect(token,&player,0);
++      else status=503;
++    }
++    pthread_mutex_unlock(&party_admission_lock);
++    if (status!=200) {profile_reply(fd,status,controller_result_message(status));return;}
++    char body[96];
++    int length=snprintf(body,sizeof body,"{\"token\":\"%s\",\"player\":%u}",token,player);
++    reply(fd,"application/json",body,(size_t)length);return;
++  }
++  if (disconnecting) status=pbs_party_disconnect(parsed.token);
++  else {
++    uint32_t sequence;pbs_input_state state;
++    status=controller_read_state(fd,request,received,&parsed,&sequence,&state,&error);
++    if(status!=200) {profile_reply(fd,status,error);return;}
++    status=pbs_party_submit(parsed.token,sequence,&state);
++  }
++  profile_reply(fd,status,controller_result_message(status));
++}
+diff --git a/payload/src/common/http/server.c b/payload/src/common/http/server.c
+--- a/payload/src/common/http/server.c
++++ b/payload/src/common/http/server.c
+@@ -7,6 +7,7 @@
+ #include "common/media/profiles.h"
+ #include "common/http/byte_range.h"
+ #include "common/http/profile_controls.h"
++#include "common/input/party.h"
+ #include <arpa/inet.h>
+ #include <ctype.h>
+ #include <dirent.h>
+@@ -170,6 +171,7 @@
+   send_all(fd, header, (size_t)h); send_all(fd, body, (size_t)n);
+ }
+ #include "common/http/controller_routes.h"
++#include "common/http/party_routes.h"
+ static void select_profile(int fd, const char *path) {
+   int code = 200;
+   pbs_profile_request request;
+@@ -346,6 +348,7 @@
+   pthread_cond_broadcast(&live.changed);
+   pthread_mutex_unlock(&live.lock);
+   pbs_input_stop();
++  pbs_party_stop();
+ }
+ static void stream(int fd) {
+   HTTP_TRACE("stream entered\n");
+@@ -693,6 +696,7 @@
+     }
+   }
+   else if (!strncmp(path,"/input/",7)) input_route(fd,method,path,request,used);
++  else if (!strncmp(path,"/party/",7)) party_route(fd,method,path,request,used);
+   else if (!strcmp(method, "GET") && !strcmp(path, "/config.json")) configuration(fd);
+   else if (!strcmp(method, "GET") && !strcmp(path, "/status.json")) status(fd);
+   else if (!strcmp(method, "GET") && !strcmp(path, "/frames")) stream(fd);
+@@ -780,6 +784,7 @@
+ }
+ void pbs_h264_server_wait(void) {
+   pbs_input_wait();
++  pbs_party_wait();
+   if (live.acceptor_valid) { pthread_join(live.acceptor, NULL); live.acceptor_valid = 0; }
+   for (int i = 0; i < 16; ++i) {
+     if (live.worker_valid[i]) { pthread_join(live.workers[i], NULL); live.worker_valid[i] = 0; }
+@@ -845,5 +850,6 @@
+   if (pthread_create(&live.acceptor, NULL, accept_thread, NULL)) { live.running = 0; close(fd); live.listener = -1; return -1; }
+   live.acceptor_valid = 1;
+   (void)pbs_input_start();
++  (void)pbs_party_start();
+   return 0;
+ }
+diff --git a/payload/src/common/input/controller.c b/payload/src/common/input/controller.c
+--- a/payload/src/common/input/controller.c
++++ b/payload/src/common/input/controller.c
+@@ -255,14 +255,31 @@
+   pthread_mutex_unlock(&input.lock);
+   return code;
+ }
+-void pbs_input_get_status(pbs_input_status *status) {
+-  pthread_mutex_lock(&input.lock);
++int pbs_input_owns(const char *token) {
++  /* This is used by profile/avatar authentication; never block the HTTP
++   * server on an OS call inside controller acquisition. */
++  if (pthread_mutex_trylock(&input.lock)) return 0;
++  int result=input.active && owns(token);
++  pthread_mutex_unlock(&input.lock);
++  return result;
++}
++int pbs_input_get_status(pbs_input_status *status) {
++  if (!status) return -1;
++  /* The PS5 library loader may stall while the acquiring thread holds
++   * input.lock. Status handlers must not consume all 16 HTTP worker slots
++   * waiting for it. The caller returns 503 until native state is certain. */
++  if (pthread_mutex_trylock(&input.lock)) {
++    *status = (pbs_input_status){.supported=1,.connected=0,
++                                 .cleanup_required=1,.last_rc=-1};
++    return -1;
++  }
+   *status = (pbs_input_status){.supported = input.backend != NULL,
+                                .connected = input.active,
+                                .cleanup_required = input.cleanup_required,
+                                .last_rc = input.last_rc,
+                                .packets = input.packets};
+   pthread_mutex_unlock(&input.lock);
++  return 0;
+ }
+ int pbs_input_parse_state(const char *text, uint32_t *sequence, pbs_input_state *state) {
+   uint32_t values[8];
+diff --git a/payload/src/common/input/controller.h b/payload/src/common/input/controller.h
+--- a/payload/src/common/input/controller.h
++++ b/payload/src/common/input/controller.h
+@@ -34,5 +34,8 @@
+ int pbs_input_connect(char token[PBS_INPUT_TOKEN_SIZE]);
+ int pbs_input_submit(const char *token, uint32_t sequence, const pbs_input_state *state);
+ int pbs_input_disconnect(const char *token);
+-void pbs_input_get_status(pbs_input_status *status);
++int pbs_input_owns(const char *token);
++/* Returns -1 without waiting when native pad setup owns the controller lock.
++ * Do not report stale ownership during an uncertain native operation. */
++int pbs_input_get_status(pbs_input_status *status);
+ int pbs_input_parse_state(const char *text, uint32_t *sequence, pbs_input_state *state);
+diff --git a/payload/src/common/input/party.c b/payload/src/common/input/party.c
+new file mode 100644
+--- /dev/null
++++ b/payload/src/common/input/party.c
+@@ -0,0 +1,231 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++#include "common/input/party.h"
++#include <errno.h>
++#include <fcntl.h>
++#include <pthread.h>
++#include <string.h>
++#include <time.h>
++#include <unistd.h>
++
++/* A lost app sends neutral input before the pad is released; native devices
++ * remain alive until payload shutdown to avoid exhausting the PS5 pad pool. */
++#define PARTY_NEUTRAL_MS 250
++#define PARTY_EXPIRE_MS 2000
++typedef struct {
++  int active, owned, pending, neutral, seen_sequence, cleanup_required;
++  int last_rc, user_prompt_sent;
++  uint32_t sequence;
++  uint64_t received, packets;
++  char token[PBS_INPUT_TOKEN_SIZE];
++  pbs_input_state state;
++} party_slot;
++
++static struct {
++  pthread_mutex_t lock;
++  pthread_cond_t changed;
++  pthread_t thread;
++  int running, thread_valid;
++  const pbs_party_backend *backend;
++  void *opaque;
++  party_slot slots[PBS_PARTY_GUESTS];
++} party = { .lock = PTHREAD_MUTEX_INITIALIZER, .changed = PTHREAD_COND_INITIALIZER };
++static const pbs_input_state neutral = {.lx=128,.ly=128,.rx=128,.ry=128};
++
++static uint64_t now_ms(void) {
++  struct timespec t;
++  clock_gettime(CLOCK_MONOTONIC, &t);
++  return (uint64_t)t.tv_sec * 1000 + (uint64_t)t.tv_nsec / 1000000;
++}
++static int valid_token(const char *token) {
++  if (!token || strlen(token) != 32) return 0;
++  for (unsigned n=0; n<32; n++)
++    if (!((token[n]>='0' && token[n]<='9') || (token[n]>='a' && token[n]<='f') ||
++          (token[n]>='A' && token[n]<='F'))) return 0;
++  return 1;
++}
++static int find_token(const char *token) {
++  if (!valid_token(token)) return -1;
++  for (int i=0; i<PBS_PARTY_GUESTS; i++) {
++    unsigned different=0;
++    for (unsigned j=0; j<32; j++)
++      different |= (unsigned char)token[j] ^ (unsigned char)party.slots[i].token[j];
++    if (!different && party.slots[i].owned) return i;
++  }
++  return -1;
++}
++static int random_token(char token[PBS_INPUT_TOKEN_SIZE]) {
++  unsigned char bytes[16]; size_t used=0;
++  int fd=open("/dev/urandom", O_RDONLY);
++  if (fd<0) return -1;
++  while (used<sizeof bytes) {
++    ssize_t n=read(fd,bytes+used,sizeof bytes-used);
++    if (n<0 && errno==EINTR) continue;
++    if (n<=0) {close(fd);return -1;}
++    used+=(size_t)n;
++  }
++  close(fd);
++  const char digits[]="0123456789abcdef";
++  for (unsigned i=0; i<16; i++) {
++    token[2*i]=digits[bytes[i]>>4];
++    token[2*i+1]=digits[bytes[i]&15];
++  }
++  token[32]=0;
++  return 0;
++}
++/* The party lock is always held by callers. */
++static int release_slot(unsigned i) {
++  party_slot *s=&party.slots[i];
++  s->active=s->pending=0;
++  if (!s->owned) return 0;
++  (void)party.backend->write(party.opaque,i,&neutral);
++  const int rc=party.backend->disconnect(party.opaque,i);
++  s->last_rc=rc; s->cleanup_required=(rc!=0);
++  if (!rc) {s->owned=0;memset(s->token,0,sizeof s->token);}
++  return rc;
++}
++static void *worker(void *ignored) {
++  (void)ignored;
++  pthread_mutex_lock(&party.lock);
++  while (party.running) {
++    int active=0;
++    for (unsigned i=0; i<PBS_PARTY_GUESTS; i++) {
++      party_slot *s=&party.slots[i];
++      if (!s->active) continue;
++      active=1;
++      uint64_t elapsed=now_ms()-s->received;
++      if (elapsed>=PARTY_EXPIRE_MS) release_slot(i);
++      else if (elapsed>=PARTY_NEUTRAL_MS && !s->neutral) {
++        int rc=party.backend->write(party.opaque,i,&neutral);
++        s->last_rc=rc; s->neutral=1; s->pending=0;
++        if (rc) release_slot(i);
++      } else if (s->pending) {
++        int rc=party.backend->write(party.opaque,i,&s->state);
++        s->last_rc=rc; s->pending=0; s->neutral=0;
++        if (rc) release_slot(i);
++      }
++    }
++    if (!party.running) break;
++    if (!active) pthread_cond_wait(&party.changed,&party.lock);
++    else {
++      struct timespec deadline;clock_gettime(CLOCK_REALTIME,&deadline);
++      deadline.tv_nsec+=8000000;
++      if (deadline.tv_nsec>=1000000000) {deadline.tv_sec++;deadline.tv_nsec-=1000000000;}
++      pthread_cond_timedwait(&party.changed,&party.lock,&deadline);
++    }
++  }
++  for (unsigned i=0; i<PBS_PARTY_GUESTS; i++)
++    if (party.slots[i].owned && !party.slots[i].cleanup_required) release_slot(i);
++  pthread_mutex_unlock(&party.lock);
++  return NULL;
++}
++void pbs_party_configure(const pbs_party_backend *backend,void *opaque) {
++  pthread_mutex_lock(&party.lock);
++  if (!party.thread_valid) {party.backend=backend;party.opaque=opaque;}
++  pthread_mutex_unlock(&party.lock);
++}
++int pbs_party_start(void) {
++  pthread_mutex_lock(&party.lock);
++  int rc=0;
++  if (party.backend && !party.thread_valid) {
++    party.running=1;rc=pthread_create(&party.thread,NULL,worker,NULL);
++    if (rc) party.running=0; else party.thread_valid=1;
++  }
++  pthread_mutex_unlock(&party.lock);
++  return rc;
++}
++void pbs_party_stop(void) {
++  pthread_mutex_lock(&party.lock);
++  party.running=0;pthread_cond_broadcast(&party.changed);
++  pthread_mutex_unlock(&party.lock);
++}
++void pbs_party_wait(void) {
++  if (party.thread_valid) {pthread_join(party.thread,NULL);party.thread_valid=0;}
++}
++void pbs_party_shutdown(void) {
++  pthread_mutex_lock(&party.lock);
++  if (party.backend) for (unsigned i=0; i<PBS_PARTY_GUESTS; i++) {
++    party_slot *s=&party.slots[i];
++    if (s->owned) (void)party.backend->write(party.opaque,i,&neutral);
++    const int rc=party.backend->destroy(party.opaque,i);
++    s->last_rc=rc;s->cleanup_required=rc!=0;
++    if (!rc) {s->owned=s->active=0;memset(s->token,0,sizeof s->token);}
++  }
++  pthread_mutex_unlock(&party.lock);
++}
++int pbs_party_connect(char token[PBS_INPUT_TOKEN_SIZE],unsigned *player,
++                      unsigned requested_player) {
++  if(requested_player != 0 && (requested_player<2 || requested_player>4)) return 400;
++  int code=409;
++  pthread_mutex_lock(&party.lock);
++  if (!party.backend) code=501;
++  else if (!party.running) code=409;
++  else for (unsigned i=0; i<PBS_PARTY_GUESTS; i++) {
++    if(requested_player && i+2 != requested_player) continue;
++    party_slot *s=&party.slots[i];
++    if (s->owned || s->cleanup_required) continue;
++    if (random_token(s->token)) {code=503;break;}
++    s->owned=1;
++    int rc=party.backend->connect(party.opaque,i);
++    if (!rc) rc=party.backend->write(party.opaque,i,&neutral);
++    s->last_rc=rc;
++    if (rc) {
++      release_slot(i);s->last_rc=rc;code=503;
++    } else {
++      s->active=1;s->received=now_ms();s->pending=0;s->neutral=1;
++      s->seen_sequence=0;s->user_prompt_sent=0;s->packets=0;
++      memcpy(token,s->token,PBS_INPUT_TOKEN_SIZE);
++      if(player) *player=i+2;
++      pthread_cond_broadcast(&party.changed);code=200;
++    }
++    break;
++  }
++  pthread_mutex_unlock(&party.lock);
++  return code;
++}
++int pbs_party_submit(const char *token,uint32_t sequence,const pbs_input_state *state) {
++  if (!state || (state->buttons & ~PBS_INPUT_BUTTONS)) return 400;
++  if (pthread_mutex_trylock(&party.lock)) return 503;
++  const int index=find_token(token);
++  int code=200;
++  if (index<0) code=403;
++  else {
++    party_slot *s=&party.slots[index];
++    if (!s->active || !party.running) code=409;
++    else if (s->seen_sequence && (int32_t)(sequence-s->sequence)<=0) code=409;
++    else {
++      s->sequence=sequence;s->seen_sequence=1;s->state=*state;
++      /* One PS press is permitted for the console's native user picker.
++       * Later system-button presses belong to the main controller. */
++      if (s->state.buttons & PBS_INPUT_PS_BUTTON) {
++        if (s->user_prompt_sent) s->state.buttons &= ~PBS_INPUT_PS_BUTTON;
++        else s->user_prompt_sent=1;
++      }
++      s->received=now_ms();s->packets++;s->pending=1;
++      pthread_cond_broadcast(&party.changed);
++    }
++  }
++  pthread_mutex_unlock(&party.lock);
++  return code;
++}
++int pbs_party_disconnect(const char *token) {
++  if (pthread_mutex_trylock(&party.lock)) return 503;
++  const int index=find_token(token);
++  int code=index<0?403:release_slot((unsigned)index)?503:200;
++  pthread_mutex_unlock(&party.lock);
++  return code;
++}
++int pbs_party_owns(const char *token) {
++  if (pthread_mutex_trylock(&party.lock)) return 0;
++  int result=find_token(token)>=0;
++  pthread_mutex_unlock(&party.lock);return result;
++}
++int pbs_party_get_status(pbs_party_slot_status slots[PBS_PARTY_GUESTS]) {
++  if (!slots || pthread_mutex_trylock(&party.lock)) return -1;
++  for (unsigned i=0; i<PBS_PARTY_GUESTS; i++) {
++    party_slot *s=&party.slots[i];
++    slots[i]=(pbs_party_slot_status){.connected=s->active,.cleanup_required=s->cleanup_required,
++      .last_rc=s->last_rc,.user_prompt_sent=s->user_prompt_sent,.packets=s->packets};
++  }
++  pthread_mutex_unlock(&party.lock);
++  return 0;
++}
+diff --git a/payload/src/common/input/party.h b/payload/src/common/input/party.h
+new file mode 100644
+--- /dev/null
++++ b/payload/src/common/input/party.h
+@@ -0,0 +1,29 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++#pragma once
++#include "common/input/controller.h"
++
++/* Three additional players alongside the existing PBS controller owner. */
++#define PBS_PARTY_GUESTS 3
++typedef struct {
++  int (*connect)(void *opaque, unsigned guest);
++  int (*write)(void *opaque, unsigned guest, const pbs_input_state *state);
++  int (*disconnect)(void *opaque, unsigned guest);
++  int (*destroy)(void *opaque, unsigned guest);
++} pbs_party_backend;
++typedef struct {
++  int connected, cleanup_required, last_rc, user_prompt_sent;
++  uint64_t packets;
++} pbs_party_slot_status;
++
++void pbs_party_configure(const pbs_party_backend *backend, void *opaque);
++int pbs_party_start(void);
++void pbs_party_stop(void);
++void pbs_party_wait(void);
++void pbs_party_shutdown(void);
++/* requested_player is 0 (first available), or the fixed slot 2, 3, 4. */
++int pbs_party_connect(char token[PBS_INPUT_TOKEN_SIZE], unsigned *player,
++                      unsigned requested_player);
++int pbs_party_submit(const char *token, uint32_t sequence, const pbs_input_state *state);
++int pbs_party_disconnect(const char *token);
++int pbs_party_owns(const char *token);
++int pbs_party_get_status(pbs_party_slot_status slots[PBS_PARTY_GUESTS]);
+diff --git a/payload/src/common/input/party_profiles.h b/payload/src/common/input/party_profiles.h
+new file mode 100644
+--- /dev/null
++++ b/payload/src/common/input/party_profiles.h
+@@ -0,0 +1,19 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++#pragma once
++#include <stddef.h>
++#include <stdint.h>
++
++/* Returns only currently logged-in local users, without passwords, tokens,
++ * account secrets or guesses about which controller owns which PS5 user. */
++#if defined(PBS_PS5_CONTROLLER) && PBS_PS5_CONTROLLER
++int pbs_party_profiles_json(char *buffer,size_t capacity);
++/* Returns a bounded copy of the PS5's public profile-cache avatar. Caller frees. */
++int pbs_party_avatar(int32_t user_id,unsigned char **bytes,size_t *size,int *mime);
++#else
++static inline int pbs_party_profiles_json(char *buffer,size_t capacity) {
++  (void)buffer;(void)capacity;return -1;
++}
++static inline int pbs_party_avatar(int32_t user_id,unsigned char **bytes,size_t *size,int *mime) {
++  (void)user_id;(void)bytes;(void)size;(void)mime;return -1;
++}
++#endif
+diff --git a/payload/src/platform/ps5/controller.c b/payload/src/platform/ps5/controller.c
+--- a/payload/src/platform/ps5/controller.c
++++ b/payload/src/platform/ps5/controller.c
+@@ -4,8 +4,12 @@
+ #include "platform/ps5/controller.h"
+ #if PBS_PS5_CONTROLLER
+ #include "common/input/controller.h"
++#include "common/input/party.h"
+ #include "platform/ps5/offset/profile.h"
+ #include <stddef.h>
++#if defined(PBS_PS5_FORCE_MBUS_PRELOAD) && PBS_PS5_FORCE_MBUS_PRELOAD
++#include <dlfcn.h>
++#endif
+ #include <stdio.h>
+ #include <string.h>
+ #include <unistd.h>
+@@ -22,6 +26,8 @@
+   int ready, privileged, owned, uncertain, unhealthy;
+ } native_pad;
+ static native_pad pad;
++typedef struct { uint32_t device; int owned, uncertain, unhealthy; } guest_device;
++static guest_device guests[PBS_PARTY_GUESTS];
+ #ifndef PBS_CONTROLLER_LOG
+ #define PBS_CONTROLLER_LOG "/data/pbs/controller.log"
+ #endif
+@@ -33,9 +39,43 @@
+     fclose(f);
+   }
+ }
++#if defined(PBS_PS5_FORCE_MBUS_PRELOAD) && PBS_PS5_FORCE_MBUS_PRELOAD && defined(PBS_PS5_CONTROLLER_TEST)
++int pbs_ps5_controller_test_load_mbus(void);
++static int ensure_mbus(void) {
++  return pbs_ps5_controller_test_load_mbus();
++}
++#elif defined(PBS_PS5_FORCE_MBUS_PRELOAD) && PBS_PS5_FORCE_MBUS_PRELOAD
++static void *mbus_library;
++static int ensure_mbus(void) {
++  if (mbus_library) return 0;
++  /* libScePad imports the device/user binding service from libSceMbus.
++   * Load it with global symbol visibility before any scePad call: on PS5
++   * 10.01 a missing Mbus import may fault or stall scePadInit. */
++  void *handle = dlopen("/system/common/lib/libSceMbus.sprx", RTLD_NOW | RTLD_GLOBAL);
++  if (!handle) handle = dlopen("libSceMbus.sprx", RTLD_NOW | RTLD_GLOBAL);
++  if (!handle || !dlsym(handle,"sceMbusBindDeviceWithUserId")) {
++    log_result("libSceMbus not resolved; controller disabled", -1);
++    if (handle) dlclose(handle);
++    return -1;
++  }
++  mbus_library = handle;
++  log_result("libSceMbus dependencies ready", 0);
++  return 0;
++}
++#else
++/* Firmware 10.01 successfully initialized and created native virtual pads
++ * using the originally linked eight-system-library payload without a direct
++ * libSceMbus dlopen. Preserve that verified path by default. Forced preload
++ * remains a separate diagnostic option, not a prerequisite to normal input. */
++static int ensure_mbus(void) { return 0; }
++#endif
+ static int prepare(void) {
+   if (pad.ready) {
+     return 0;
++  }
++  if (ensure_mbus()) {
++    log_result("Controller prerequisite libSceMbus failed", -1);
++    return -1;
+   }
+   uint32_t module = 0;
+   if (kernel_dynlib_handle(getpid(), "libScePad.sprx", &module)) {
+@@ -51,7 +91,9 @@
+     }
+     module = (uint32_t)rc;
+   }
++  log_result("Resolve scePadInit begin", 0);
+   pad.init = (void *)kernel_dynlib_dlsym(getpid(), module, "scePadInit");
++  log_result("Resolve scePadInit end", (intptr_t)pad.init > 0 ? 0 : -1);
+   pad.privilege = (void *)kernel_dynlib_dlsym(getpid(), module, "scePadSetProcessPrivilege");
+   pad.add = (void *)kernel_dynlib_dlsym(getpid(), module, "scePadVirtualDeviceAddDevice");
+   pad.insert = (void *)kernel_dynlib_dlsym(getpid(), module, "scePadVirtualDeviceInsertData");
+@@ -61,6 +103,7 @@
+     log_result("Required virtual-pad exports unavailable", -1);
+     return -1;
+   }
++  log_result("scePadInit begin", 0);
+   int rc = pad.init();
+   log_result("scePadInit", rc);
+   if (rc) {
+@@ -178,11 +221,66 @@
+   pad.unhealthy = 0;
+   return 0;
+ }
++static int connect_guest(void *unused, unsigned index) {
++  (void)unused;
++  if (index >= PBS_PARTY_GUESTS || guests[index].uncertain || guests[index].unhealthy) return -1;
++  int rc=prepare();
++  if (rc) return rc;
++  if (!pad.privileged) {
++    rc=pad.privilege(1);
++    if (rc) {log_result("Guest SetProcessPrivilege(1)",rc);return rc;}
++    pad.privileged=1;
++  }
++  guest_device *device=&guests[index];
++  if (device->owned) return 0;
++  unsigned char request[0x40]={0}, output[16]={0};
++  request[4]=1;
++  memset(output,0xff,4);
++  rc=pad.add(request,output);
++  if (!rc) {
++    memcpy(&device->device,output,4);
++    if (device->device==UINT32_MAX) {device->uncertain=1;rc=-1;}
++    else device->owned=1;
++  }
++  log_result("Guest VirtualDeviceAddDevice",rc);
++  return rc;
++}
++static int write_guest(void *unused,unsigned index,const pbs_input_state *state) {
++  (void)unused;
++  if (index>=PBS_PARTY_GUESTS || !guests[index].owned || !state) return -1;
++  unsigned char data[0x80]={0};
++  memcpy(data,&state->buttons,4);
++  data[4]=state->lx;data[5]=state->ly;data[6]=state->rx;data[7]=state->ry;
++  data[8]=state->l2;data[9]=state->r2;
++  const float orientation_w=1.0f;
++  memcpy(data+0x18,&orientation_w,4);
++  const int rc=pad.insert((int)guests[index].device,data);
++  if (rc) {guests[index].unhealthy=1;log_result("Guest VirtualDeviceInsertData",rc);}
++  return rc;
++}
++static int disconnect_guest(void *unused,unsigned index) {
++  (void)unused;
++  if (index>=PBS_PARTY_GUESTS || guests[index].uncertain || guests[index].unhealthy) return -1;
++  /* Preserve the PS5 device across short network disconnects. */
++  return 0;
++}
++static int destroy_guest(void *unused,unsigned index) {
++  (void)unused;
++  if (index>=PBS_PARTY_GUESTS || guests[index].uncertain) return -1;
++  guest_device *device=&guests[index];
++  if (!device->owned) return 0;
++  const int rc=pad.remove((int)device->device);
++  log_result("Guest VirtualDeviceDeleteDevice",rc);
++  if (!rc) {device->owned=0;device->device=0;device->unhealthy=0;}
++  return rc;
++}
+ void pbs_ps5_controller_configure(void) {
+   static const pbs_input_backend backend = {connect_pad, write_pad, disconnect_pad, destroy_pad};
++  static const pbs_party_backend party_backend = {connect_guest,write_guest,disconnect_guest,destroy_guest};
+   /* Follow the same exact/family selector as video; no copied firmware list. */
+   if (pbs_ps5_find_offsets(kernel_get_fw_version())) {
+     pbs_input_configure(&backend, NULL);
+-  }
+-}
+-#endif
++    pbs_party_configure(&party_backend,NULL);
++  }
++}
++#endif
+diff --git a/payload/src/platform/ps5/main.c b/payload/src/platform/ps5/main.c
+--- a/payload/src/platform/ps5/main.c
++++ b/payload/src/platform/ps5/main.c
+@@ -21,6 +21,7 @@
+ 
+ #include "common/http/server.h"
+ #include "common/input/controller.h"
++#include "common/input/party.h"
+ #include "common/media/profiles.h"
+ #include "common/process/inject.h"
+ #include "platform/ps5/capture_fallback.h"
+@@ -1042,6 +1043,7 @@
+       if (pbs_h264_server_running()) goto avopen_retry;
+     }
+     if (live_request) { pbs_h264_server_stop(); pbs_h264_server_wait(); }
++    pbs_party_shutdown();
+     pbs_input_shutdown();
+     notify(live_server_started ? "PBS: streaming stopped"
+                                : (stream_failure[0] ? stream_failure : failure_note));
+diff --git a/payload/src/platform/ps5/party_profiles.c b/payload/src/platform/ps5/party_profiles.c
+new file mode 100644
+--- /dev/null
++++ b/payload/src/platform/ps5/party_profiles.c
+@@ -0,0 +1,107 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++#include "common/input/party_profiles.h"
++#include <ps5/kernel.h>
++#include <pthread.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <unistd.h>
++
++int sceKernelLoadStartModule(const char *,size_t,const void *,uint32_t,void *,uint32_t *);
++typedef struct {int32_t user_id[4];} user_list;
++static pthread_mutex_t profile_lock=PTHREAD_MUTEX_INITIALIZER;
++static struct {
++  int ready;
++  int (*initialize)(void *);
++  int (*list)(user_list *);
++  int (*name)(int32_t,char *,size_t);
++} service;
++
++static int ensure_service(void) {
++  if(service.ready) return 0;
++  uint32_t module=0;
++  if(kernel_dynlib_handle(getpid(),"libSceUserService.sprx",&module)) {
++    const int rc=sceKernelLoadStartModule("/system/common/lib/libSceUserService.sprx",0,NULL,0,NULL,NULL);
++    if(rc<=0) return -1;
++    module=(uint32_t)rc;
++  }
++  service.initialize=(void *)kernel_dynlib_dlsym(getpid(),module,"sceUserServiceInitialize");
++  service.list=(void *)kernel_dynlib_dlsym(getpid(),module,"sceUserServiceGetLoginUserIdList");
++  service.name=(void *)kernel_dynlib_dlsym(getpid(),module,"sceUserServiceGetUserName");
++  if((intptr_t)service.list<=0 || (intptr_t)service.name<=0) return -1;
++  /* A payload may already share this module with the system. Initialization
++   * returning the already-initialized code is not a reason to take ownership
++   * of the service's termination. */
++  if((intptr_t)service.initialize>0) (void)service.initialize(NULL);
++  service.ready=1;
++  return 0;
++}
++static int read_logged_users(user_list *users) {
++  if(ensure_service()) return -1;
++  for(unsigned i=0;i<4;i++) users->user_id[i]=-1;
++  return service.list(users);
++}
++static void append_json_name(char *output,size_t capacity,size_t *at,const char *name) {
++  if(*at+2>=capacity) return;
++  output[(*at)++]='"';
++  for(size_t i=0;name[i] && i<32;i++) {
++    unsigned char ch=(unsigned char)name[i];
++    if(ch<32) continue;
++    if(ch=='"' || ch=='\\') {
++      if(*at+3>=capacity) break;
++      output[(*at)++]='\\';
++    } else if(*at+2>=capacity) break;
++    output[(*at)++]=(char)ch;
++  }
++  output[(*at)++]='"';output[*at]=0;
++}
++int pbs_party_profiles_json(char *buffer,size_t capacity) {
++  if(!buffer || capacity<128) return -1;
++  pthread_mutex_lock(&profile_lock);
++  user_list users;
++  if(read_logged_users(&users)) {pthread_mutex_unlock(&profile_lock);return -1;}
++  size_t at=0;
++  at+=(size_t)snprintf(buffer+at,capacity-at,"{\"available\":true,\"users\":[");
++  unsigned emitted=0;
++  for(unsigned i=0;i<4;i++) {
++    const int32_t id=users.user_id[i];
++    if(id<=0 || id==0xff) continue;
++    char name[33]={0};
++    if(service.name(id,name,sizeof name)) continue;
++    if(at+100>=capacity) break;
++    at+=(size_t)snprintf(buffer+at,capacity-at,"%s{\"user_id\":%d,\"name\":",
++                         emitted?",":"",id);
++    append_json_name(buffer,capacity,&at,name);
++    at+=(size_t)snprintf(buffer+at,capacity-at,",\"avatar\":true}");
++    emitted++;
++  }
++  at+=(size_t)snprintf(buffer+at,capacity-at,"]}");
++  pthread_mutex_unlock(&profile_lock);
++  return (int)at;
++}
++int pbs_party_avatar(int32_t user_id,unsigned char **bytes,size_t *size,int *mime) {
++  if(!bytes || !size || !mime || user_id<=0) return -1;
++  *bytes=NULL;*size=0;*mime=0;
++  pthread_mutex_lock(&profile_lock);
++  user_list users;int allowed=0;
++  if(!read_logged_users(&users)) for(unsigned i=0;i<4;i++)
++    if(users.user_id[i]==user_id) {allowed=1;break;}
++  if(!allowed) {pthread_mutex_unlock(&profile_lock);return -1;}
++  char path[160];
++  snprintf(path,sizeof path,"/system_data/priv/cache/profile/0x%x/avatar.png",(unsigned)user_id);
++  FILE *file=fopen(path,"rb");
++  if(!file) {pthread_mutex_unlock(&profile_lock);return -1;}
++  int error=fseek(file,0,SEEK_END);
++  long len=error?-1:ftell(file);
++  if(len<8 || len>256*1024 || fseek(file,0,SEEK_SET)) {fclose(file);pthread_mutex_unlock(&profile_lock);return -1;}
++  unsigned char *image=malloc((size_t)len);
++  if(!image) {fclose(file);pthread_mutex_unlock(&profile_lock);return -1;}
++  size_t count=fread(image,1,(size_t)len,file);
++  fclose(file);pthread_mutex_unlock(&profile_lock);
++  if(count!=(size_t)len) {free(image);return -1;}
++  if(count>=8 && !memcmp(image,"\x89PNG\r\n\x1a\n",8)) *mime=1;
++  else if(count>=3 && image[0]==0xff && image[1]==0xd8 && image[2]==0xff) *mime=2;
++  else {free(image);return -1;}
++  *bytes=image;*size=count;return 0;
++}
+diff --git a/relay-controller-test.sh b/relay-controller-test.sh
+--- a/relay-controller-test.sh
++++ b/relay-controller-test.sh
+@@ -5,7 +5,9 @@
+ out=build/relay-tests
+ mkdir -p "$out"
+ flags=(-std=gnu11 -O2 -Wall -Wextra -Werror -Ipayload/src -Ipayload/build/generated -Itests/stubs -Itools)
+-cc "${flags[@]}" -pthread tests/http/controller.c payload/src/common/http/server.c payload/src/common/input/controller.c -o "$out/http-controller"
++cc "${flags[@]}" -pthread tests/http/controller.c payload/src/common/http/server.c payload/src/common/input/controller.c payload/src/common/input/party.c -o "$out/http-controller"
+ "$out/http-controller"
+-cc "${flags[@]}" tests/ps5/controller_backend.c payload/src/platform/ps5/offset/*.c -o "$out/ps5-controller"
++cc "${flags[@]}" -pthread tests/http/controller_stall.c payload/src/common/http/server.c payload/src/common/input/controller.c payload/src/common/input/party.c -o "$out/http-controller-stall"
++"$out/http-controller-stall"
++cc "${flags[@]}" -pthread tests/ps5/controller_backend.c payload/src/platform/ps5/offset/*.c payload/src/common/input/party.c -o "$out/ps5-controller"
+ "$out/ps5-controller"
+diff --git a/relay-quality-test.sh b/relay-quality-test.sh
+--- a/relay-quality-test.sh
++++ b/relay-quality-test.sh
+@@ -5,6 +5,6 @@
+ out=build/relay-tests
+ mkdir -p "$out"
+ flags=(-std=gnu11 -O2 -Wall -Wextra -Werror -Ipayload/src -Ipayload/build/generated -Itests/stubs -Itools)
+-cc "${flags[@]}" -pthread tests/http/profiles.c payload/src/common/http/server.c payload/src/common/input/controller.c -o "$out/http-profiles"
++cc "${flags[@]}" -pthread tests/http/profiles.c payload/src/common/http/server.c payload/src/common/input/controller.c payload/src/common/input/party.c -o "$out/http-profiles"
+ "$out/http-profiles"
+ bash relay-controller-test.sh
+diff --git a/tests/http/controller_stall.c b/tests/http/controller_stall.c
+new file mode 100644
+--- /dev/null
++++ b/tests/http/controller_stall.c
+@@ -0,0 +1,96 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++/* Confirm that a stalled native Pad call cannot starve all PBS HTTP workers.
++ * No console and no real pad are involved. */
++#include "common/http/server.h"
++#include "common/input/controller.h"
++#include <arpa/inet.h>
++#include <assert.h>
++#include <pthread.h>
++#include <stdio.h>
++#include <string.h>
++#include <sys/socket.h>
++#include <sys/time.h>
++#include <unistd.h>
++
++static pthread_mutex_t gate = PTHREAD_MUTEX_INITIALIZER;
++static pthread_cond_t wake = PTHREAD_COND_INITIALIZER;
++static int in_native_connect, native_released;
++static char connect_response[1024];
++
++static int stall_connect(void *ignored) {
++  (void)ignored;
++  pthread_mutex_lock(&gate);
++  in_native_connect=1;
++  pthread_cond_broadcast(&wake);
++  while (!native_released) pthread_cond_wait(&wake,&gate);
++  pthread_mutex_unlock(&gate);
++  return 0;
++}
++static int pad_write(void *ignored,const pbs_input_state *state) {
++  (void)ignored;(void)state;return 0;
++}
++static int pad_disconnect(void *ignored) {(void)ignored;return 0;}
++static int pad_destroy(void *ignored) {(void)ignored;return 0;}
++
++/* A bounded raw HTTP client. If any request waits behind the native Pad
++ * mutex or party admission mutex, the receive deadline makes the test fail. */
++static void http(const char *request,int expected,char response[1024]) {
++  int fd=socket(AF_INET,SOCK_STREAM,0);
++  assert(fd>=0);
++  struct timeval timeout={.tv_sec=1,.tv_usec=0};
++  assert(!setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof timeout));
++  struct sockaddr_in address={.sin_family=AF_INET,
++      .sin_port=htons(18119),.sin_addr.s_addr=htonl(INADDR_LOOPBACK)};
++  assert(!connect(fd,(struct sockaddr *)&address,sizeof address));
++  const size_t len=strlen(request);
++  assert(send(fd,request,len,0)==(ssize_t)len);
++  shutdown(fd,SHUT_WR);
++  size_t count=0;
++  for (;;) {
++    ssize_t got=recv(fd,response+count,1023-count,0);
++    if(got<=0) break;
++    count+=(size_t)got;
++    if(count==1023) break;
++  }
++  response[count]=0;
++  close(fd);
++  char prefix[32];
++  snprintf(prefix,sizeof prefix,"HTTP/1.1 %d",expected);
++  if(!strstr(response,prefix)) fprintf(stderr,"Expected %s; got [%s]\n",prefix,response);
++  assert(strstr(response,prefix));
++}
++static void *acquiring_viewer(void *ignored) {
++  (void)ignored;
++  http("POST /party/connect HTTP/1.1\r\nHost: localhost\r\n"
++       "X-PBS-Input: 1\r\nContent-Length: 0\r\n\r\n",200,connect_response);
++  return NULL;
++}
++int main(void) {
++  const pbs_input_backend backend={stall_connect,pad_write,pad_disconnect,pad_destroy};
++  const unsigned char sps[]={0x67,0x4d,0x40,0x28},pps[]={0x68,0xee,0x3c,0x80};
++  pbs_input_configure(&backend,NULL);
++  assert(!pbs_h264_server_start(18119,1920,1080,sps,sizeof sps,pps,sizeof pps));
++  pthread_t joining;
++  assert(!pthread_create(&joining,NULL,acquiring_viewer,NULL));
++  pthread_mutex_lock(&gate);
++  while(!in_native_connect) pthread_cond_wait(&wake,&gate);
++  pthread_mutex_unlock(&gate);
++  char response[1024];
++  http("GET /config.json HTTP/1.1\r\nHost: localhost\r\n\r\n",200,response);
++  http("GET /input/status HTTP/1.1\r\nHost: localhost\r\n\r\n",503,response);
++  http("GET /party/status HTTP/1.1\r\nHost: localhost\r\n\r\n",503,response);
++  http("POST /party/connect HTTP/1.1\r\nHost: localhost\r\n"
++       "X-PBS-Input: 1\r\nContent-Length: 0\r\n\r\n",503,response);
++  pthread_mutex_lock(&gate);
++  native_released=1;
++  pthread_cond_broadcast(&wake);
++  pthread_mutex_unlock(&gate);
++  assert(!pthread_join(joining,NULL));
++  assert(strstr(connect_response,"\"player\":1"));
++  http("GET /input/status HTTP/1.1\r\nHost: localhost\r\n\r\n",200,response);
++  pbs_h264_server_stop();
++  pbs_h264_server_wait();
++  pbs_input_shutdown();
++  puts("Stalled native controller leaves config, status and admission HTTP responsive");
++  return 0;
++}
+diff --git a/tests/ps5/controller_backend.c b/tests/ps5/controller_backend.c
+--- a/tests/ps5/controller_backend.c
++++ b/tests/ps5/controller_backend.c
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: GPL-3.0-or-later
+ /* Exercise the native adapter without loading a module or touching a device. */
+ #define PBS_CONTROLLER_LOG "/dev/null"
++#define PBS_PS5_CONTROLLER_TEST 1
+ #include "platform/ps5/controller.c"
+ #include <assert.h>
+ 
+@@ -9,7 +10,14 @@
+ static int init_rc, add_rc, delete_rc, privilege_rc, insert_rc;
+ static int init_calls, add_calls, delete_calls, privilege_value, missing_export, invalid_id;
+ static int require_load, module_loaded, load_calls, load_rc;
++static int mbus_ready, mbus_error, mbus_calls;
+ static unsigned char inserted[0x80];
++int pbs_ps5_controller_test_load_mbus(void) {
++  mbus_calls++;
++  if (mbus_error) return -1;
++  mbus_ready = 1;
++  return 0;
++}
+ 
+ uint32_t kernel_get_fw_version(void) {
+   return firmware;
+@@ -40,6 +48,11 @@
+   return load_rc;
+ }
+ static int mock_init(void) {
++  /* Mbus is optional in the known-good firmware 10.01 initialization path;
++   * when opted into the diagnostic preload it must resolve first. */
++#if defined(PBS_PS5_FORCE_MBUS_PRELOAD) && PBS_PS5_FORCE_MBUS_PRELOAD
++  assert(mbus_ready);
++#endif
+   init_calls++;
+   return init_rc;
+ }
+@@ -100,6 +113,7 @@
+   init_rc = add_rc = delete_rc = privilege_rc = insert_rc = 0;
+   init_calls = add_calls = delete_calls = privilege_value = missing_export = invalid_id = 0;
+   require_load = module_loaded = load_calls = 0;
++  mbus_ready = mbus_error = mbus_calls = 0;
+   load_rc = 0x2023;
+ }
+ int main(void) {
+@@ -120,6 +134,12 @@
+   pbs_ps5_controller_configure();
+   assert(!configured);
+   firmware = 0x09400008;
++
++  #if defined(PBS_PS5_FORCE_MBUS_PRELOAD) && PBS_PS5_FORCE_MBUS_PRELOAD
++  reset();
++  mbus_error=1;
++  assert(connect_pad(NULL) && !load_calls && !init_calls && mbus_calls==1);
++  #endif
+ 
+   reset();
+   require_load = 1;

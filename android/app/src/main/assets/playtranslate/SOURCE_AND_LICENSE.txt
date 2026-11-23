@@ -1,0 +1,30 @@
+Relay Play Translate Japanese speech + video OCR fixture
+
+Original video title:
+肉じゃがは水を一滴も使わず作るのが一番旨い！！野菜の旨味が半端ない【至高の無水肉じゃが】
+Original author/channel: 料理研究家リュウジのバズレシピ
+Original URL: https://www.youtube.com/watch?v=h67vdKlPGzg
+Original publication: 2020-09-24
+License reported by YouTube yt-dlp metadata on 2026-11-23:
+Creative Commons Attribution license (reuse allowed), CC BY.
+License information: https://creativecommons.org/licenses/by/3.0/
+
+Changes made for Relay internal test fixture:
+- Selected original interval 00:06:20–00:07:20 based on subtitle coverage.
+- Downloaded the 60-second window with yt-dlp.
+- Re-encoded to H.264/AAC MP4 for broad Android compatibility.
+- Shifted the original Japanese subtitle cues to clip-relative timestamps and
+  burned them visibly into the MP4 so video-frame OCR sees real subtitle pixels.
+- Embedded subtitle style and timing differ from the creator's YouTube playback.
+
+Output file: japanese-subtitled-60s.mp4
+Duration: 60.026633 seconds
+SHA-256: B8F0D8AAD893C7418EB6556B93DC67FBCA445658F32FF85C1DB12E3035389079
+Caption reference: japanese-subtitled-60s.srt
+Original Japanese caption track: youtube-japanese-cc.ja.vtt
+Twelve caption cues overlap the selected minute.
+
+The subtitle reference is used for *verification*, not as Relay's OCR output.
+Passing the app test requires OCR on actual video frames and audio speech
+recognition while the video is playing. The app must not silently substitute
+these source subtitle texts as recognized or translated results.

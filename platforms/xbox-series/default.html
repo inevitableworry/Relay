@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Relay — Xbox Series Developer Mode</title>
+  <link rel="stylesheet" href="css/relay.css" />
+</head>
+<body>
+  <canvas id="sphere" aria-hidden="true"></canvas>
+  <main id="application" class="scene" aria-label="Relay PS Portal home">
+    <header class="topbar">
+      <nav class="tabs" aria-label="Relay navigation">
+        <!-- Each original drawable already depicts the complete three-tab bar. -->
+        <img id="nav-artwork" src="Assets/portal_nav_remote.png" alt="" aria-hidden="true" />
+        <button id="tab-remote" type="button" class="tab selected" aria-label="Remote Play" aria-current="page"></button>
+        <button id="tab-cloud" type="button" class="tab" aria-label="Cloud Streaming"></button>
+        <button id="tab-search" type="button" class="tab" aria-label="Search"></button>
+      </nav>
+      <div class="indicators"><img src="Assets/portal_status_wifi.png" alt="Wi-Fi" /><span id="clock">--:--</span><button id="quick-toggle" aria-label="Quick menu"><img src="Assets/portal_status_sliders.png" alt="Settings" /></button></div>
+    </header>
+    <section id="home" class="home" aria-live="polite">
+      <h1 id="home-heading">Connect to your PS5</h1>
+      <p id="home-subtitle">Remote Play JB · 192.168.0.230</p>
+    </section>
+    <div id="home-actions" class="home-actions"><button id="connect-button" class="action-primary">Connect</button></div>
+    <div class="footer"><span>LB / RB &nbsp; Switch Tabs</span></div>
+  </main>
+
+  <aside id="quick-menu" class="quick-menu hidden" aria-label="Relay quick menu" aria-hidden="true">
+    <h2>Remote Play JB</h2>
+    <button class="menu-item" data-action="connect">Connect</button>
+    <button class="menu-item" data-action="settings">Network &amp; Settings</button>
+    <button class="menu-item" data-action="quality">Video Quality</button>
+    <button class="menu-item" data-action="audio">Audio Output</button>
+    <button class="menu-item" data-action="close">Close</button>
+  </aside>
+
+  <section id="panel" class="dialog hidden" aria-hidden="true" aria-labelledby="panel-heading">
+    <div class="dialog-inner">
+      <h2 id="panel-heading">Relay</h2>
+      <div id="panel-body"></div>
+      <p id="panel-status" role="status" aria-live="polite"></p>
+      <div class="dialog-actions"><button id="panel-secondary">Back</button><button id="panel-primary" class="action-primary">Check PS5</button></div>
+    </div>
+  </section>
+
+  <audio id="sound-focus" preload="auto" src="Assets/menu_focus.wav"></audio>
+  <audio id="sound-confirm" preload="auto" src="Assets/menu_confirm.wav"></audio>
+  <audio id="sound-back" preload="auto" src="Assets/menu_back.wav"></audio>
+  <audio id="sound-open" preload="auto" src="Assets/menu_open.wav"></audio>
+  <audio id="sound-close" preload="auto" src="Assets/menu_close.wav"></audio>
+  <audio id="sound-reveal" preload="auto" src="Assets/menu_reveal.wav"></audio>
+  <audio id="sound-music" preload="auto" loop src="Assets/portal_home_loop.wav"></audio>
+
+  <!-- Generated from Relay's existing Android particle distribution, not a third-party UI. -->
+  <script src="js/particles.js"></script>
+  <script src="js/pbs-protocol.js"></script>
+  <script src="js/relay.js"></script>
+</body>
+</html>

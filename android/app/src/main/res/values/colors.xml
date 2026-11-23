@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#28252F</color>
+    <color name="primary_dark">#18171D</color>
+    <color name="accent">#F3EFFA</color>
+    <color name="portal_white">#F7F5FF</color>
+    <color name="portal_muted">#C3BBD8</color>
+    <color name="portal_accent_light">#C4B7FF</color>
+    <color name="portal_card">#35313D</color>
+    <color name="portal_card_selected">#575061</color>
+    <color name="portal_tab_track">#252039</color>
+    <color name="portal_chip">#413468</color>
+
+    <color name="stream_text">@android:color/white</color>
+    <color name="stream_background">@android:color/black</color>
+    <color name="stream_overlay_background">#77000000</color>
+
+    <color name="floating_action_button_speed_dial_background">#B9ADFF</color>
+    <color name="floating_action_button_speed_dial_tint">#100C2A</color>
+
+    <color name="control_primary">#A6FFFFFF</color>
+    <color name="control_pressed">#F2FFFFFF</color>
+
+    <color name="item_delete_background">#B71C1C</color>
+</resources>

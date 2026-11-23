@@ -1,0 +1,16 @@
+{
+  "android\\app\\src\\main\\assets\\fonts\\inter-variable.ttf": "29160a80ff49ddcab2c97711247e08b1fab27a484a329ce8b813d820dc559031",
+  "android\\app\\src\\main\\assets\\portal_audio\\menu_back.ogg": "cb2de9d937630f78460acc04dc2b1518b504960aec3c4d3b000ce39d298d2489",
+  "android\\app\\src\\main\\assets\\portal_audio\\menu_close.ogg": "ce6b75e1016606e7be3a2fb41f05fd4b83770bee10925c86a046bcc8600c1748",
+  "android\\app\\src\\main\\assets\\portal_audio\\menu_confirm.ogg": "d697fc12f1c5badbff905a5d2b5bfdc5324801f6025eb4ed59eb2abe99e336be",
+  "android\\app\\src\\main\\assets\\portal_audio\\menu_focus.ogg": "02a7fc4d6d5806bd72d7ac863f3ccb60ef72b2b4f48715a197f9836b4fc0a741",
+  "android\\app\\src\\main\\assets\\portal_audio\\menu_open.ogg": "82ae93d8b5f1864f96b51d3af1198a685739d8730c7b23eef81690d63cd43adb",
+  "android\\app\\src\\main\\assets\\portal_audio\\menu_reveal.ogg": "89aeab44814c321e8a375673314eaf87648bf05b7e390b0804c82527a6e44e24",
+  "android\\app\\src\\main\\java\\com\\metallic\\chiaki\\main\\PortalBackdropView.kt": "e04683db62f3bab446865c83aad9641ad9a61abd074576973aa4753e23efdbae",
+  "platforms\\switch1\\romfs\\relay\\nav\\portal_nav_cloud.png": "9ba53e8cc65dd2f15963687dede2773170ef53bda69ca84fb54083b1fea5721a",
+  "platforms\\switch1\\romfs\\relay\\nav\\portal_nav_remote.png": "d3e7adb09c5ff2f44544352a2e6640865f3bbdd29adf6e885df60aa22cace659",
+  "platforms\\switch1\\romfs\\relay\\nav\\portal_nav_search.png": "68e4f5eb7b624403820993abb2890d3484a9e2e5e3d6d8c5bfdd82f89c27500c",
+  "platforms\\switch1\\romfs\\relay\\nav\\portal_status_battery.png": "213b9af1695081b694e27dbc88de29eeded5f4dac4e4a53167cdc9e4518c1819",
+  "platforms\\switch1\\romfs\\relay\\nav\\portal_status_sliders.png": "363e000a88d5acca7736f59f225d69de99d1d8114f85d5f51fa5c0bfd20ad5b9",
+  "platforms\\switch1\\romfs\\relay\\nav\\portal_status_wifi.png": "86bad4fe4c70d849d27b4fe617c412a6ba108cb372f39cdb35f4a997bacbd699"
+}

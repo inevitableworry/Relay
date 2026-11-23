@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/settingsRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#081021">
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="34dp"
+            android:paddingEnd="34dp"
+            android:paddingTop="32dp"
+            android:paddingBottom="30dp">
+            <TextView
+                android:id="@+id/settingsBack"
+                android:layout_width="wrap_content"
+                android:layout_height="52dp"
+                android:gravity="center_vertical"
+                android:text="‹   Settings"
+                android:textColor="#ffffff"
+                android:textSize="22sp"
+                android:clickable="true"
+                android:focusable="true"/>
+            <GridLayout
+                android:id="@+id/settingsGrid"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="25dp"
+                android:columnCount="3"
+                android:useDefaultMargins="true"
+                android:alignmentMode="alignBounds">
+                <Button android:id="@+id/settingsNetwork" style="@style/Portal.SettingsTile"
+                    android:text="◎\nNetwork"/>
+                <Button android:id="@+id/settingsSystem" style="@style/Portal.SettingsTile"
+                    android:text="▣\nSystem"/>
+                <Button android:id="@+id/settingsDisplay" style="@style/Portal.SettingsTile"
+                    android:text="▭\nDisplay and Brightness"/>
+                <Button android:id="@+id/settingsController" style="@style/Portal.SettingsTile"
+                    android:text="♧\nController"/>
+                <Button android:id="@+id/settingsAudio" style="@style/Portal.SettingsTile"
+                    android:text="◉\nAudio Devices"/>
+                <Button android:id="@+id/settingsCloud" style="@style/Portal.SettingsTile"
+                    android:text="☁\nCloud Streaming"/>
+            </GridLayout>
+            <Button
+                android:id="@+id/settingsConsoleManager"
+                android:layout_width="match_parent"
+                android:layout_height="58dp"
+                android:layout_marginTop="18dp"
+                android:background="@drawable/portal_settings_tile"
+                android:backgroundTint="@null"
+                android:text="Registered Consoles and Streaming Settings"
+                android:textSize="15sp"
+                android:textAllCaps="false"
+                android:textColor="#ffffff"/>
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:text="PlayStation Remote Play controls and quality settings are provided by the Chiaki engine."
+                android:textColor="#b1bbd3"
+                android:gravity="center"
+                android:textSize="12sp"/>
+        </LinearLayout>
+    </ScrollView>
+</FrameLayout>

@@ -1,0 +1,22 @@
+{
+  "schema": "relay.keyboard.layout.v1",
+  "reference": "PlayStation-inspired independent Relay visual implementation; not Sony firmware assets",
+  "palette": {
+    "surface": "#121526",
+    "textEntry": "#090E19",
+    "key": "#303344",
+    "focusedKey": "#6A58AD",
+    "focusBorder": "#DACFFF",
+    "text": "#F2F0FA",
+    "mutedText": "#B8B0D8"
+  },
+  "rows": ["1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"],
+  "symbolRows": ["1234567890", "!@#$%^&*()", "-_=+[]{};", ".,?/\\:~"],
+  "actions": ["a/A", "@#", "SPACE", "DEL", "DONE"],
+  "layout": {
+    "singleDisplay": "bottom modal sheet",
+    "twoDisplay": "keyboard and menus on secondary display, stream and primary scene unobstructed",
+    "controller": "dpad select; confirm input; cancel back; touch direct selection when supported"
+  },
+  "status": "reference contract only; check per-port implementation and runtime status in RELAY_BUILD_PARITY_MASTER.md"
+}

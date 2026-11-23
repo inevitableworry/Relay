@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- User-approved package downloads; never silent install. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Granted only when the user starts spoken game captions. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
+    <!-- Requested only on explicit Anki export; never accessed during gameplay. -->
+    <uses-permission android:name="com.ichi2.anki.permission.READ_WRITE_DATABASE" />
+    <queries>
+        <package android:name="com.ichi2.anki" />
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".main.PortalApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/relay_launcher"
+        android:label="@string/app_name"
+        android:isGame="true"
+        android:resizeableActivity="true"
+        android:banner="@mipmap/atv_banner"
+        android:roundIcon="@mipmap/relay_launcher"
+        android:usesCleartextTraffic="true"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme"
+        tools:ignore="GoogleAppIndexingWarning">
+
+        <provider
+            android:authorities="${applicationId}.fileprovider"
+            android:name="androidx.core.content.FileProvider"
+            android:grantUriPermissions="true"
+            android:exported="false">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/filepaths"
+                />
+        </provider>
+
+        <activity android:name=".main.PortalBootActivity"
+            android:theme="@style/PortalBootTheme"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Opt-in Home provider. Android shows its own role chooser; Relay
+             never silently replaces the user's existing launcher. -->
+        <activity-alias android:name=".main.PortalHome"
+            android:targetActivity=".main.PortalBootActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.HOME"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </activity-alias>
+
+        <activity android:name=".main.PortalMainActivity"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
+            android:exported="false"/>
+
+        <activity
+            android:name=".main.PortalSettingsActivity"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
+            android:exported="false"/>
+        <activity android:name=".main.PortalUpdateActivity"
+            android:exported="false"/>
+        <activity android:name=".main.PortalSetupActivity"
+            android:exported="false"/>
+        <activity android:name=".main.PortalConnectivityActivity" android:exported="false"/>
+        <activity android:name=".main.PortalGamepadRemapActivity" android:exported="false"/>
+        <activity android:name=".main.PortalCropSettingsActivity" android:exported="false"/>
+        <activity android:name=".main.PortalWordLearningActivity" android:exported="false"/>
+        <activity android:name=".main.PortalHandheldCompatibilityActivity" android:exported="false"/>
+        <activity android:name=".main.PortalJapaneseTranslationTestActivity" android:exported="false"/>
+        <service android:name=".main.PortalAudioCaptionService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
+        <activity android:name=".main.PortalRemoteAccessActivity"
+            android:exported="false"/>
+
+        <activity
+            android:name=".jb.JbStreamActivity"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
+            android:exported="false"/>
+        <activity
+            android:name=".jb.GalleryActivity"
+            android:exported="false"/>
+
+        <activity
+            android:name=".stream.StreamActivity"
+            android:theme="@style/StreamTheme"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout" />
+
+        <activity
+            android:name=".settings.SettingsActivity" />
+
+        <activity
+            android:name=".regist.RegistActivity"
+            android:theme="@style/MageTheme"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+            android:windowSoftInputMode="adjustResize"/>
+
+        <activity
+            android:name=".regist.RegistExecuteActivity"
+            android:theme="@style/MageTheme"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize" />
+
+        <activity
+            android:name=".manualconsole.EditManualConsoleActivity"
+            android:theme="@style/MageTheme"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize" />
+    </application>
+
+</manifest>

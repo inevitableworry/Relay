@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <!-- 2D app displayed as a spatial panel by Horizon OS. Do not declare
+             the immersive com.oculus.intent.category.VR category until an
+             OpenXR / Meta Spatial SDK renderer is actually implemented. -->
+        <meta-data android:name="com.oculus.supportedDevices"
+            android:value="quest2|questpro|quest3|quest3s" />
+        <activity android:name=".main.PortalBootActivity"
+            android:resizeableActivity="true"
+            tools:node="merge">
+            <layout android:defaultWidth="1024dp" android:defaultHeight="640dp"
+                android:minWidth="360dp" android:minHeight="225dp" />
+        </activity>
+    </application>
+</manifest>

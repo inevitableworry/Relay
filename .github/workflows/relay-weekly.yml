@@ -1,0 +1,96 @@
+name: Relay weekly verified builds
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'
+      timezone: America/New_York
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Platform to build when verified
+        type: choice
+        required: true
+        default: all
+        options: [all, 3ds, android-mobile, android-tv, android-bravia, android-dualscreen, android-other, vita, switch, windows, xbox, apple, tizen, roku, steamos]
+      publish:
+        description: Publish a release only after all verification gates pass
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: relay-release
+  cancel-in-progress: false
+
+jobs:
+  release-plan:
+    name: Audit and version planning
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.version.outputs.publish }}
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Check publisher and source provenance
+        run: |
+          test "$GITHUB_REPOSITORY" = inevitableworry/Relay
+          python3 scripts/relay_release.py scan
+          git diff --check
+      - name: Determine next version and eligible targets
+        id: version
+        env:
+          BUILD_TARGET: ${{ inputs.target || 'all' }}
+        run: python3 scripts/relay_release.py plan --target "$BUILD_TARGET" --github-output "$GITHUB_OUTPUT"
+
+  nintendo-3ds:
+    name: Nintendo 3DS family release validation
+    needs: release-plan
+    if: needs.release-plan.outputs.publish == 'true' && (github.event_name == 'schedule' || inputs.publish == true)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Build optimized ARM11 application
+        run: |
+          docker run --rm -v "$PWD":/workspace -w /workspace/platforms/3ds devkitpro/devkitarm:20260610 make -j2
+      - name: Check exact source, output format, and screenshot/GIF evidence
+        env:
+          VERSION: ${{ needs.release-plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user 'Pillow>=11,<13'
+          mkdir -p release-assets
+          cp platforms/3ds/relay_3ds.3dsx "release-assets/Relay-3DS-v$VERSION.3dsx"
+          python3 scripts/relay_release.py verify-3ds --binary "release-assets/Relay-3DS-v$VERSION.3dsx"
+          python3 scripts/relay_release_media.py verify --platform 3DS --version "$VERSION"
+          cp "docs/release-validation/media/Relay-3DS-v$VERSION-menu.png" release-assets/
+          cp "docs/release-validation/media/Relay-3DS-v$VERSION-menu.gif" release-assets/
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: relay-3ds-verified
+          path: release-assets/
+          if-no-files-found: error
+      - name: Create versioned public release, only after all checks pass
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release-plan.outputs.version }}
+          RELEASE_TAG: ${{ needs.release-plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = inevitableworry/Relay
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Version is already published; keeping release immutable"
+            exit 1
+          fi
+          python3 scripts/relay_release_media.py notes --platform 3DS --version "$VERSION" --output release-notes.md
+          gh release create "$RELEASE_TAG" release-assets/* --title "Relay $VERSION — Nintendo 3DS family" --notes-file release-notes.md --target "$GITHUB_SHA" --latest

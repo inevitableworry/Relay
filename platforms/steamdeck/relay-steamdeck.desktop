@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Relay (Steam Deck)
+Comment=PlayStation Portal-style Relay launcher for SteamOS
+Exec=bash ./run-relay.sh
+Type=Application
+Terminal=false
+Categories=Game;
+Keywords=PlayStation;Remote Play;Steam Deck;Relay;
+StartupNotify=true

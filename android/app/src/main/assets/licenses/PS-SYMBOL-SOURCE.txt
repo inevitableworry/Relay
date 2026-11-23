@@ -1,0 +1,13 @@
+PlayStation symbol
+
+Source: https://www.playstation.com/en-us/
+Retrieved 2026-11-22 from inline SVG selector svg.shared-nav-ps-logo.
+Original SVG and retrieval metadata are preserved in
+docs/portal-reference/video/official-playstation-symbol.svg and .source.json.
+Original SHA-256: c5e136701aad37ec61b1b65f1a72293668db0e570938a86fe888ea8b73eac01f
+
+The path geometry is unchanged. The Android vector removes surrounding empty
+viewport space and applies a monochrome tint to reproduce the observed private
+Portal-style boot/unlock reference. Copyright and trademark rights remain with
+Sony Interactive Entertainment. This is not an official Sony application;
+the source-code license does not relicense Sony's symbol or other visual assets.

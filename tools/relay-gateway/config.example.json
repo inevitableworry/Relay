@@ -1,0 +1,19 @@
+{
+  "ps5Host": "192.0.2.10",
+  "ps5Port": 9999,
+  "bearerToken": "<replace with a cryptographically random token>",
+  "payload": {
+    "file": "capture.elf",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "size": 123456,
+    "loaderPort": 9021,
+    "capturePort": 9999
+  },
+  "startupJournal": "startup-attempt.ndjson",
+  "timeouts": {
+    "requestMs": 3000,
+    "probeMs": 4000,
+    "uploadMs": 10000,
+    "readyMs": 12000
+  }
+}

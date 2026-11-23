@@ -1,0 +1,117 @@
+{
+  "purpose": "Public clone definitions only: actual sources stay outside Git",
+  "entries": [
+    {
+      "path": ".tools/pbs-upstream",
+      "repository": "https://github.com/seregonwar/PBS-Payload.git",
+      "commit": "d66453a68a72e7061bad2bb1d0a3fd9dcb27b2c0",
+      "source_kind": "git-clone",
+      "note": "Existing local clone contains uncommitted changes not included in public manifest"
+    },
+    {
+      "path": "external/InstantCaption",
+      "repository": "https://github.com/zmxhot/InstantCaption",
+      "commit": "72c64c6d4d333c69f55616f0edf4320973d7093f",
+      "source_kind": "git-clone",
+      "note": ""
+    },
+    {
+      "path": "platforms/ps5-social-link/vendor/qrcodegen-upstream",
+      "repository": "https://github.com/nayuki/QR-Code-generator.git",
+      "commit": "9a217d443937f60cc56c1458c39a211d7f2d3af5",
+      "source_kind": "git-clone",
+      "note": ""
+    },
+    {
+      "path": "platforms/switch1/tools/packaging/hacbrewpack-src",
+      "repository": "https://github.com/rlaphoenix/hacBrewPack.git",
+      "commit": "745b16ecfc9ce055743067d200572204cb2aac6c",
+      "source_kind": "git-clone",
+      "note": ""
+    },
+    {
+      "path": "platforms/switch1/tools/packaging/nx-tools",
+      "repository": "https://github.com/nx-std/tools.git",
+      "commit": "0fdf0e6f9d4bb5ae05c8c7427e944784e8136064",
+      "source_kind": "git-clone",
+      "note": ""
+    },
+    {
+      "path": "platforms/windows11/research/Playnite-FSE-Launcher",
+      "repository": "https://github.com/leeson865/Playnite-FSE-Launcher.git",
+      "commit": "c2602f98c22f6dbffb8b90ffb5e3f9288d55d290",
+      "source_kind": "git-clone",
+      "note": ""
+    },
+    {
+      "path": "platforms/xbox360/toolchain/xsdk",
+      "repository": "https://github.com/xenosworks/xsdk.git",
+      "commit": "9e6de98f6b5d737bce0fecd2864edae94bdd2637",
+      "source_kind": "git-clone",
+      "note": ""
+    },
+    {
+      "path": "research/design-skills/anti-slop-design",
+      "repository": "https://github.com/nyrthoughts/anti-slop-design.git",
+      "commit": "ef059f3fed87115efb3fb35c1f86906599eb4848",
+      "source_kind": "git-clone",
+      "note": ""
+    },
+    {
+      "path": "research/design-skills/no-slop-ui",
+      "repository": "https://github.com/LeoStehlik/no-slop-ui.git",
+      "commit": "c5f80190f0a6cbd906b81d54e79e2756931077fb",
+      "source_kind": "git-clone",
+      "note": ""
+    },
+    {
+      "path": "research/design-skills/unslop-ui-skill",
+      "repository": "https://github.com/claudiusararu/unslop-ui-skill.git",
+      "commit": "f954aaf0d21c47d66bfc318b1aab904cf650c109",
+      "source_kind": "git-clone",
+      "note": ""
+    },
+    {
+      "path": "research/design-skills/ux-ui-skills",
+      "repository": "https://github.com/taylorwinfield/ux-ui-skills.git",
+      "commit": "cac4dff479b8143924e8d55cc0ade94d7f1f028e",
+      "source_kind": "git-clone",
+      "note": ""
+    },
+    {
+      "path": "research/ios-build-tools/TheosWin",
+      "repository": "https://github.com/CacheW/TheosWin.git",
+      "commit": "4db6414ee5ef046434e11931b2ce908655cd8297",
+      "source_kind": "git-clone",
+      "note": ""
+    },
+    {
+      "path": "research/ios-build-tools/WindowsIPABuilder",
+      "repository": "https://github.com/iamjrmh/WindowsIPABuilder.git",
+      "commit": "e91f6b7d3d759ec92d046bd2da1d4eae1da6c112",
+      "source_kind": "git-clone",
+      "note": ""
+    },
+    {
+      "path": "research/playtranslate-upstream",
+      "repository": "https://github.com/dominostars/playtranslate.git",
+      "commit": "343c74f1a9e6918e1b7382bd11bb193357656741",
+      "source_kind": "git-clone",
+      "note": ""
+    },
+    {
+      "path": "third-party/InstantCaption",
+      "repository": "https://github.com/zmxhot/InstantCaption.git",
+      "commit": "72c64c6d4d333c69f55616f0edf4320973d7093f",
+      "source_kind": "git-clone",
+      "note": ""
+    },
+    {
+      "path": "third-party/jxrlib",
+      "repository": "https://github.com/4creators/jxrlib",
+      "commit": "1ef17dd8b7b6e958241914c8911d942a43837233",
+      "source_kind": "source-archive",
+      "note": ""
+    }
+  ]
+}

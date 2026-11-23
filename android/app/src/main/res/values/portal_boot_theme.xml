@@ -1,0 +1,11 @@
+<resources>
+    <style name="PortalBootBase" parent="AppTheme">
+        <item name="android:windowBackground">@drawable/portal_boot_window</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+    <style name="PortalBootTheme" parent="PortalBootBase"/>
+</resources>

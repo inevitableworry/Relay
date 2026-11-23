@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootLayout"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingBottom="24dp">
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:gravity="center_vertical" android:orientation="horizontal" android:layout_marginBottom="20dp">
+        <ImageView android:id="@+id/iconImageView" android:layout_width="44dp"
+            android:layout_height="32dp" android:src="@drawable/ic_regist_console"
+            android:importantForAccessibility="no" app:tint="#ffffff"/>
+        <TextView android:id="@+id/titleTextView" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="wrap_content" android:layout_marginStart="12dp"
+            android:text="Traditional Remote Play" android:textColor="#ffffff"
+            android:textSize="19sp" android:fontFamily="sans-serif"/>
+    </LinearLayout>
+
+    <LinearLayout android:id="@+id/registColumns" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:orientation="vertical" android:baselineAligned="false">
+        <LinearLayout android:id="@+id/instructionsPanel" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:orientation="vertical"
+            android:padding="20dp" android:background="@drawable/portal_form_surface">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Link your console" android:textColor="#ffffff" android:textSize="22sp"
+                android:layout_marginBottom="18dp"/>
+            <TextView android:id="@+id/pinHelpBeforeTextView" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="@string/regist_pin_instructions_ps5_before"
+                android:textColor="#c2bfc9" android:textSize="16sp"/>
+            <TextView android:id="@+id/pinHelpNavigationTextView" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="@string/regist_pin_instructions_ps5_navigation"
+                android:textColor="#ffffff" android:textSize="18sp" android:lineSpacingExtra="7dp"
+                android:layout_marginTop="14dp" android:layout_marginBottom="14dp"/>
+            <TextView android:id="@+id/pinHelpAfterTextView" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="Keep that screen open and enter its 8-digit code here."
+                android:textColor="#c2bfc9" android:textSize="16sp"/>
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Your console must be reachable on the network. Once paired, select Connect from the home screen."
+                android:textColor="#c2bfc9" android:textSize="14sp" android:layout_marginTop="22dp"/>
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/detailsPanel" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="20dp">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Console" android:textColor="#ffffff" android:textSize="18sp"/>
+            <RadioGroup android:id="@+id/ps4VersionRadioGroup" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="4dp">
+                <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/ps5RadioButton"
+                    android:layout_width="match_parent" android:layout_height="48dp"
+                    android:text="@string/regist_option_ps5" android:textColor="#ffffff" app:buttonTint="#ded9ea"
+                    android:checked="true"/>
+                <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/ps4VersionGE8RadioButton"
+                    android:layout_width="match_parent" android:layout_height="48dp"
+                    android:text="@string/regist_option_ps4_ge_8" android:textColor="#ffffff" app:buttonTint="#ded9ea"/>
+                <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/ps4VersionGE7RadioButton"
+                    android:layout_width="match_parent" android:layout_height="48dp"
+                    android:text="@string/regist_option_ps4_ge_7" android:textColor="#ffffff" app:buttonTint="#ded9ea"/>
+                <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/ps4VersionLT7RadioButton"
+                    android:layout_width="match_parent" android:layout_height="48dp"
+                    android:text="@string/regist_option_ps4_lt_7" android:textColor="#ffffff" app:buttonTint="#ded9ea"/>
+            </RadioGroup>
+
+            <com.google.android.material.textfield.TextInputLayout android:id="@+id/hostTextInputLayout"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="16dp" android:hint="@string/hint_regist_host"
+                android:textColorHint="#c2bfc9" app:boxBackgroundMode="outline"
+                app:boxStrokeColor="#ffffff" app:hintTextColor="#ffffff" app:boxCornerRadiusTopStart="6dp"
+                app:boxCornerRadiusTopEnd="6dp" app:boxCornerRadiusBottomStart="6dp" app:boxCornerRadiusBottomEnd="6dp">
+                <com.google.android.material.textfield.TextInputEditText android:id="@+id/hostEditText"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:minHeight="58dp" android:inputType="textNoSuggestions|textVisiblePassword"
+                    android:singleLine="true" android:textColor="#ffffff" android:imeOptions="actionNext"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.checkbox.MaterialCheckBox android:id="@+id/broadcastCheckBox"
+                android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="48dp"
+                android:text="@string/regist_broadcast" android:textColor="#c2bfc9" app:buttonTint="#ded9ea"/>
+
+            <com.google.android.material.textfield.TextInputLayout android:id="@+id/psnIdTextInputLayout"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="14dp" android:hint="@string/hint_regist_psn_account_id"
+                android:textColorHint="#c2bfc9" app:boxBackgroundMode="outline"
+                app:boxStrokeColor="#ffffff" app:hintTextColor="#ffffff" app:boxCornerRadiusTopStart="6dp"
+                app:boxCornerRadiusTopEnd="6dp" app:boxCornerRadiusBottomStart="6dp" app:boxCornerRadiusBottomEnd="6dp">
+                <com.google.android.material.textfield.TextInputEditText android:id="@+id/psnIdEditText"
+                    android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="58dp"
+                    android:inputType="textNoSuggestions|textVisiblePassword" android:singleLine="true"
+                    android:textColor="#ffffff" android:imeOptions="actionNext"/>
+            </com.google.android.material.textfield.TextInputLayout>
+            <LinearLayout android:id="@+id/psnAccountIdHelpGroup" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="10dp">
+                <TextView android:id="@+id/psnAccountIdHelpTextView" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:text="@string/regist_psn_account_id_help"
+                    android:textSize="14sp" android:textColor="#c2bfc9"/>
+                <TextView android:id="@+id/psnAccountIdHelpURLTextView" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:text="@string/regist_psn_account_id_help_url"
+                    android:textSize="13sp" android:textColor="#ffffff" android:textColorLink="#ded9ff"
+                    android:autoLink="web" android:linksClickable="true" android:layout_marginTop="4dp"/>
+            </LinearLayout>
+
+            <com.google.android.material.textfield.TextInputLayout android:id="@+id/pinTextInputLayout"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="24dp" android:hint="8-digit pairing code"
+                android:textColorHint="#c2bfc9" app:boxBackgroundMode="outline"
+                app:boxStrokeColor="#ffffff" app:hintTextColor="#ffffff" app:boxCornerRadiusTopStart="6dp"
+                app:boxCornerRadiusTopEnd="6dp" app:boxCornerRadiusBottomStart="6dp" app:boxCornerRadiusBottomEnd="6dp">
+                <com.google.android.material.textfield.TextInputEditText android:id="@+id/pinEditText"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:minHeight="72dp" android:inputType="number" android:digits="0123456789"
+                    android:maxLength="8" android:singleLine="true" android:imeOptions="actionDone"
+                    android:importantForAutofill="no" android:textColor="#ffffff" android:textSize="28sp"
+                    android:letterSpacing="0.16" android:fontFamily="sans-serif"/>
+            </com.google.android.material.textfield.TextInputLayout>
+            <com.google.android.material.button.MaterialButton android:id="@+id/registButton"
+                android:layout_width="220dp" android:layout_height="56dp" android:layout_gravity="end"
+                android:layout_marginTop="24dp" android:text="Pair Console" android:textAllCaps="false"
+                android:textColor="#111111" android:textSize="17sp"
+                app:backgroundTint="#ffffff" app:cornerRadius="48dp"/>
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

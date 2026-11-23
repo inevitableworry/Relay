@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootLayout" android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:paddingTop="24dp" android:paddingBottom="24dp">
+
+    <ImageView android:id="@+id/iconImageView" android:layout_width="112dp"
+        android:layout_height="64dp" android:src="@drawable/ic_regist_console"
+        android:layout_marginBottom="26dp" android:importantForAccessibility="no" app:tint="#ffffff"/>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <ProgressBar android:id="@+id/progressBar" android:layout_width="28dp"
+            android:layout_height="28dp" android:layout_marginEnd="16dp"
+            android:indeterminateTint="#ffffff" android:visibility="gone"/>
+        <TextView android:id="@+id/infoTextView" android:layout_width="0dp"
+            android:layout_height="wrap_content" android:layout_weight="1"
+            android:text="Preparing to pair" android:textColor="#ffffff"
+            android:textSize="26sp" android:fontFamily="sans-serif-light"
+            android:accessibilityLiveRegion="polite"/>
+    </LinearLayout>
+    <TextView android:id="@+id/statusDetailTextView" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:layout_marginTop="18dp"
+        android:text="Keep your console's pairing screen open."
+        android:textColor="#c2bfc9" android:textSize="16sp"/>
+
+    <com.google.android.material.button.MaterialButton android:id="@+id/detailsButton"
+        android:layout_width="wrap_content" android:layout_height="52dp" android:layout_marginTop="32dp"
+        android:text="Connection Details" android:textAllCaps="false" android:textColor="#ffffff"
+        android:textSize="15sp" app:backgroundTint="#3e3a44" app:cornerRadius="8dp"/>
+
+    <LinearLayout android:id="@+id/detailsContainer" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:orientation="vertical"
+        android:layout_marginTop="14dp" android:visibility="gone">
+        <TextView android:id="@+id/logTextView" android:layout_width="match_parent"
+            android:layout_height="220dp" android:fontFamily="monospace" android:textSize="12sp"
+            android:textColor="#ded9ea" android:background="@drawable/portal_form_surface"
+            android:padding="16dp" android:scrollbars="vertical" android:scrollHorizontally="true"
+            android:textIsSelectable="true"/>
+        <com.google.android.material.button.MaterialButton android:id="@+id/shareLogButton"
+            android:layout_width="wrap_content" android:layout_height="52dp" android:layout_gravity="end"
+            android:layout_marginTop="12dp" android:text="@string/action_share_log"
+            android:textAllCaps="false" android:textColor="#ffffff" app:backgroundTint="#3e3a44"
+            app:cornerRadius="8dp" app:icon="@drawable/ic_share" app:iconTint="#ffffff"/>
+    </LinearLayout>
+
+    <com.google.android.material.button.MaterialButton android:id="@+id/doneButton"
+        android:layout_width="220dp" android:layout_height="56dp" android:layout_gravity="end"
+        android:layout_marginTop="32dp" android:text="Cancel Pairing" android:textAllCaps="false"
+        android:textColor="#111111" android:textSize="17sp"
+        app:backgroundTint="#ffffff" app:cornerRadius="48dp"/>
+</LinearLayout>

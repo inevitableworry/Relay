@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Older Pocket 3+ hardware need not expose gyroscope, GPS or touch
+         while being used with physical controls or an external display. -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
+    <uses-feature android:name="android.hardware.gamepad" android:required="false"/>
+    <uses-feature android:name="android.hardware.telephony" android:required="false"/>
+    <application android:label="Relay Retroid" tools:replace="android:label">
+        <!-- Do not force landscape on the hinged two-screen Pocket Duo.
+             The existing Portal responsive layout chooses per-window geometry. -->
+    </application>
+</manifest>

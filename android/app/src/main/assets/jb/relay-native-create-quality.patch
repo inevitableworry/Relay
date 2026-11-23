@@ -1,0 +1,452 @@
+diff --git a/payload/src/common/http/controller_routes.h b/payload/src/common/http/controller_routes.h
+index 57d292e..c2543a8 100644
+--- a/payload/src/common/http/controller_routes.h
++++ b/payload/src/common/http/controller_routes.h
+@@ -168,10 +168,12 @@ static void controller_reply_status(int fd) {
+   char body[256];
+   int length = snprintf(body, sizeof body,
+                         "{\"supported\":%s,\"connected\":%s,\"cleanup_required\":%s,"
+-                        "\"last_rc\":%d,\"packets\":%llu}",
++                        "\"last_rc\":%d,\"packets\":%llu,\"buttons_mask\":%u,"
++                        "\"create_mask\":%u,\"ps_mask\":%u}",
+                         status.supported ? "true" : "false", status.connected ? "true" : "false",
+                         status.cleanup_required ? "true" : "false", status.last_rc,
+-                        (unsigned long long)status.packets);
++                        (unsigned long long)status.packets, PBS_INPUT_BUTTONS,
++                        PBS_INPUT_CREATE_BUTTON, PBS_INPUT_PS_BUTTON);
+   reply(fd, "application/json", body, (size_t)length);
+ }
+ 
+diff --git a/payload/src/common/http/server.c b/payload/src/common/http/server.c
+index 207fd66..0f8ab7b 100644
+--- a/payload/src/common/http/server.c
++++ b/payload/src/common/http/server.c
+@@ -6,6 +6,7 @@
+ #include "common/media/buffer.h"
+ #include "common/media/profiles.h"
+ #include "common/http/byte_range.h"
++#include "common/http/profile_controls.h"
+ #include <arpa/inet.h>
+ #include <ctype.h>
+ #include <dirent.h>
+@@ -56,6 +57,8 @@ static struct {
+   int restart_request;
+   int profiles_enabled, profile_pending, profile_changing, profile_height, profile_error, profile_error_height;
+   unsigned profile_mask;
++  int rate_enabled;
++  uint32_t bitrate, min_qp, profile_bitrate, profile_min_qp;
+   uint64_t generation;
+   FILE *rec;
+   int rec_headers_pending;
+@@ -107,17 +110,35 @@ void pbs_h264_enable_profile_mask(unsigned mask) {
+   pthread_mutex_unlock(&live.lock);
+ }
+ int pbs_h264_take_profile_request(int *height) {
++  return pbs_h264_take_profile_request_ex(height, NULL, NULL);
++}
++int pbs_h264_take_profile_request_ex(int *height, uint32_t *bitrate, uint32_t *min_qp) {
+   pthread_mutex_lock(&live.lock);
+   int requested = live.profile_pending;
+-  if (requested) { *height = live.profile_height; live.profile_pending = 0; }
++  if (requested) {
++    *height = live.profile_height; live.profile_pending = 0;
++    if (bitrate) *bitrate = live.rate_enabled ? live.profile_bitrate : 0;
++    if (min_qp) *min_qp = live.rate_enabled ? live.profile_min_qp : 0;
++  }
+   pthread_mutex_unlock(&live.lock);
+   return requested;
+ }
++void pbs_h264_rate_control_ready(uint32_t bitrate, uint32_t min_qp) {
++  if (bitrate < PBS_RATE_MIN_BPS || bitrate > PBS_RATE_MAX_BPS ||
++      min_qp < PBS_RATE_MIN_QP || min_qp > PBS_RATE_MAX_QP) return;
++  pthread_mutex_lock(&live.lock);
++  live.rate_enabled = 1; live.bitrate = bitrate; live.min_qp = min_qp;
++  if (!live.profile_changing) {
++    live.profile_bitrate = bitrate; live.profile_min_qp = min_qp;
++  }
++  pthread_mutex_unlock(&live.lock);
++}
+ void pbs_h264_profile_failed(void) {
+   pthread_mutex_lock(&live.lock);
+   live.profile_error = 1; live.profile_changing = live.profile_pending = 0;
+   live.profile_error_height = live.profile_height;
+   live.profile_height = live.height;
++  live.profile_bitrate = live.bitrate; live.profile_min_qp = live.min_qp;
+   pthread_mutex_unlock(&live.lock);
+ }
+ 
+@@ -150,20 +171,28 @@ static void profile_reply(int fd, int code, const char *message) {
+ }
+ #include "common/http/controller_routes.h"
+ static void select_profile(int fd, const char *path) {
+-  int height = 0, consumed = 0, code = 200;
+-  const char *message = "Resolution change requested";
+-  if (sscanf(path, "/capture/profile?height=%d%n", &height, &consumed) != 1 ||
+-      path[consumed] || pbs_capture_profile_for_height(height, NULL)) {
+-    profile_reply(fd, 400, "Unsupported resolution"); return;
++  int code = 200;
++  pbs_profile_request request;
++  const char *message = "Capture profile change requested";
++  if (pbs_profile_parse(path, &request) || pbs_capture_profile_for_height(request.height, NULL)) {
++    profile_reply(fd, 400, "Unsupported capture profile or encoder settings"); return;
+   }
+   pthread_mutex_lock(&live.lock);
++  int height = request.height;
++  uint32_t bitrate = request.has_rate ? request.bitrate : live.bitrate;
++  uint32_t min_qp = request.has_rate ? request.min_qp : live.min_qp;
+   if (!live.profiles_enabled) { code = 501; message = "This capture backend does not support resolution changes"; }
++  else if (request.has_rate && !live.rate_enabled) { code = 501; message = "This capture backend does not support encoder tuning"; }
+   else if (!(live.profile_mask & pbs_capture_profile_bit(height))) { code=422; message="This firmware does not support that capture resolution"; }
+   else if (live.rec || live.rec_pending) { code = 409; message = "Stop recording before changing resolution"; }
+   else if (live.profile_changing) { code = 409; message = "A resolution change is already in progress"; }
+-  else if (height == live.height) { message = "Resolution already active"; }
++  else if (height == live.height && bitrate == live.bitrate && min_qp == live.min_qp) {
++    message = "Capture profile already active";
++    live.profile_error = live.profile_error_height = 0;
++  }
+   else {
+     live.profile_height = height; live.profile_pending = live.profile_changing = 1;
++    live.profile_bitrate = bitrate; live.profile_min_qp = min_qp;
+     live.profile_error = live.profile_error_height = 0; live.restart_request = 1;
+   }
+   pthread_mutex_unlock(&live.lock);
+@@ -448,7 +477,7 @@ static void rtp_stream(int fd, int port) {
+   pbs_video_free(copy, capacity);close(target.socket);
+ }
+ static void configuration(int fd) {
+-  char sps[257], pps[257], body[1536], audio[160], resolutions[64];
++  char sps[257], pps[257], body[2048], audio[160], resolutions[64], rate[384];
+ #ifdef PBS_PS4
+   const char *platform = "PS4";
+ #else
+@@ -465,9 +494,15 @@ static void configuration(int fd) {
+   if (!strcmp(live.audio_codec, "none")) snprintf(audio, sizeof audio, "null");
+   else snprintf(audio, sizeof audio, "{\"codec\":\"%s\",\"channels\":%d,\"rate\":%d,\"bits\":32}",
+       live.audio_codec[0] ? live.audio_codec : "pcm_f32le", live.audio_channels, live.audio_rate);
+-  int n = snprintf(body, sizeof body, "{\"platform\":\"%s\",\"width\":%d,\"height\":%d,\"fps\":%d,\"codec\":\"avc1.%02x%02x%02x\",\"sps\":\"%s\",\"pps\":\"%s\",\"audio\":%s,\"resolutions\":%s,\"requested_height\":%d,\"profile_changing\":%s,\"profile_error\":%s,\"profile_error_height\":%d}", platform, live.width, live.height, live.fps, live.sps[1], live.sps[2], live.sps[3], sps, pps, audio,
++  if (live.rate_enabled)
++    snprintf(rate, sizeof rate, "{\"version\":1,\"min_bps\":%u,\"max_bps\":%u,\"min_qp\":%u,\"max_qp\":%u,\"bitrate_bps\":%u,\"requested_bitrate_bps\":%u,\"min_qp_value\":%u,\"requested_min_qp\":%u}",
++      PBS_RATE_MIN_BPS, PBS_RATE_MAX_BPS, PBS_RATE_MIN_QP, PBS_RATE_MAX_QP,
++      live.bitrate, live.profile_changing ? live.profile_bitrate : live.bitrate,
++      live.min_qp, live.profile_changing ? live.profile_min_qp : live.min_qp);
++  else strcpy(rate, "null");
++  int n = snprintf(body, sizeof body, "{\"platform\":\"%s\",\"width\":%d,\"height\":%d,\"fps\":%d,\"codec\":\"avc1.%02x%02x%02x\",\"sps\":\"%s\",\"pps\":\"%s\",\"audio\":%s,\"resolutions\":%s,\"requested_height\":%d,\"profile_changing\":%s,\"profile_error\":%s,\"profile_error_height\":%d,\"rate_control\":%s}", platform, live.width, live.height, live.fps, live.sps[1], live.sps[2], live.sps[3], sps, pps, audio,
+       resolutions, live.profile_changing ? live.profile_height : live.height,
+-      live.profile_changing ? "true" : "false", live.profile_error ? "true" : "false", live.profile_error_height);
++      live.profile_changing ? "true" : "false", live.profile_error ? "true" : "false", live.profile_error_height, rate);
+   pthread_mutex_unlock(&live.lock);
+   if (n > 0 && (size_t)n < sizeof body) reply(fd, "application/json", body, (size_t)n);
+ }
+diff --git a/payload/src/common/http/server.h b/payload/src/common/http/server.h
+index 60aa7c3..53ea75d 100644
+--- a/payload/src/common/http/server.h
++++ b/payload/src/common/http/server.h
+@@ -32,4 +32,7 @@ int pbs_h264_take_restart_request(void);
+ void pbs_h264_enable_profiles(void);
+ void pbs_h264_enable_profile_mask(unsigned mask);
+ int pbs_h264_take_profile_request(int *height);
++int pbs_h264_take_profile_request_ex(int *height, uint32_t *bitrate, uint32_t *min_qp);
++/* Advertise only after the backend accepted these native encoder settings. */
++void pbs_h264_rate_control_ready(uint32_t bitrate, uint32_t min_qp);
+ void pbs_h264_profile_failed(void);
+diff --git a/payload/src/common/input/controller.h b/payload/src/common/input/controller.h
+index dc0e20f..b13a2e6 100644
+--- a/payload/src/common/input/controller.h
++++ b/payload/src/common/input/controller.h
+@@ -3,7 +3,10 @@
+ #include <stdint.h>
+ 
+ #define PBS_INPUT_TOKEN_SIZE 33
+-#define PBS_INPUT_BUTTONS 0x0013fffeu
++/* Relay correction: native Create/Share is bit 0; PS is bit 16. */
++#define PBS_INPUT_CREATE_BUTTON 0x00000001u
++#define PBS_INPUT_PS_BUTTON 0x00010000u
++#define PBS_INPUT_BUTTONS 0x0013ffffu
+ typedef struct {
+   uint32_t buttons;
+   uint8_t lx, ly, rx, ry, l2, r2;
+diff --git a/payload/src/platform/ps5/main.c b/payload/src/platform/ps5/main.c
+index e59fa5b..c164ae2 100644
+--- a/payload/src/platform/ps5/main.c
++++ b/payload/src/platform/ps5/main.c
+@@ -102,20 +102,25 @@ static int live_server_started;
+ static char stream_failure[96];
+ static int live_profile_ready;
+ static int bitrate_after_start;
++static int requested_rate_required;
+ 
+ static const char *fmt_rc(long rc);
+ 
+-static void set_video_bitrate(FILE *f, pbs_inject_t *ctx, uint64_t handle) {
++static long set_video_bitrate(FILE *f, pbs_inject_t *ctx, uint64_t handle) {
+   intptr_t fn = pbs_resolve_in(ctx->pid, "libSceAvcap2.sprx", "sceAvcap2SetVideoBitrate");
+   unsigned char params[16] = {0};
+   uint64_t size = sizeof params;
+   memcpy(params, &size, 8); memcpy(params + 8, &requested_video_bitrate, 4);
+   memcpy(params + 12, &requested_video_budget, 4);
+   if (requested_video_budget) fprintf(f, "SetVideoBitrate companion=%u\n", requested_video_budget);
+-  if (fn && !pbs_inject_write_at(ctx, ctx->scratch + 0x780, params, sizeof params))
++  if (fn && !pbs_inject_write_at(ctx, ctx->scratch + 0x780, params, sizeof params)) {
++    long rc = capture_call_fast(ctx, fn, (uint64_t[6]){handle, (uint64_t)ctx->scratch + 0x780, 0, 0, 0, 0});
+     fprintf(f, "SetVideoBitrate(%u%s) -> %s\n", requested_video_bitrate,
+-      bitrate_after_start ? " after Start" : "", fmt_rc(capture_call_fast(ctx, fn,
+-      (uint64_t[6]){handle, (uint64_t)ctx->scratch + 0x780, 0, 0, 0, 0})));
++      bitrate_after_start ? " after Start" : "", fmt_rc(rc));
++    return rc;
++  }
++  fprintf(f, "SetVideoBitrate unavailable; encoder tuning is not advertised\n");
++  return LONG_MIN;
+ }
+ 
+ static void param_u64(unsigned char *p, size_t offset, uint64_t value) {
+@@ -304,7 +309,16 @@ static int capture_stream(FILE *f, pbs_inject_t *ctx, uint64_t handle, int secon
+   if (!frame) goto capture_free;
+   FILE *out = fopen("/data/pbs/h264.stream", "wb");
+   if (!out) goto capture_free;
+-  if (requested_video_bitrate && !bitrate_after_start) set_video_bitrate(f, ctx, handle);
++  long rate_rc = LONG_MIN;
++  if (requested_video_bitrate && !bitrate_after_start) rate_rc = set_video_bitrate(f, ctx, handle);
++  if (requested_rate_required && !bitrate_after_start &&
++      (rate_rc == LONG_MIN || (int32_t)(uint32_t)rate_rc < 0)) {
++    fprintf(f, "Requested encoder tuning rejected; close owned handle before any rollback\n");
++    recover = serving && pbs_h264_server_running();
++    if (recover) pbs_h264_discontinuity();
++    fclose(out);
++    goto capture_free;
++  }
+   pbs_audio_t audio;
+   memset(&audio, 0, sizeof audio);
+   if (audio_mode == 2 && !pbs_audio_open(f, ctx, &audio, capture_feature, 0)) audio.publish = 1;
+@@ -320,7 +334,7 @@ static int capture_stream(FILE *f, pbs_inject_t *ctx, uint64_t handle, int secon
+   uint64_t last_stress_key_frame = UINT64_MAX;
+   if (serving && rc != LONG_MIN && (int32_t)(uint32_t)rc < 0 && pbs_h264_server_running()) recover = 1;
+   if (rc != LONG_MIN && (int32_t)(uint32_t)rc >= 0) {
+-    if (requested_video_bitrate && bitrate_after_start) set_video_bitrate(f, ctx, handle);
++    if (requested_video_bitrate && bitrate_after_start) rate_rc = set_video_bitrate(f, ctx, handle);
+     intptr_t headers = pbs_resolve_in(ctx->pid, "libSceAvcap2.sprx", "sceAvcap2GetNonVclNalUnitStream");
+     if (headers) {
+       long hr = capture_call_fast(ctx, headers, (uint64_t[6]){handle, (uint64_t)buffer, 0, 0, 0, 0});
+@@ -343,6 +357,8 @@ static int capture_stream(FILE *f, pbs_inject_t *ctx, uint64_t handle, int secon
+           fprintf(f, "Annex B headers: SPS=%llu PPS=%llu\n",
+                   (unsigned long long)sps_len, (unsigned long long)pps_len);
+           if (serving) {
++            if (native_rate_config && rate_rc != LONG_MIN && (int32_t)(uint32_t)rate_rc >= 0)
++              pbs_h264_rate_control_ready(requested_video_bitrate, requested_min_qp);
+             int server_rc = pbs_h264_server_start(port, width, height, metadata + 0x18, sps_len, metadata + 0xa0, pps_len);
+             int bound_port = server_rc ? 0 : pbs_h264_server_port();
+             fprintf(f, "H.264 HTTP :%d -> %d\n", port, server_rc);
+@@ -635,6 +651,8 @@ int main(int argc, char **argv) {
+       width=1920; height=1080; capture_feature=12;
+     }
+     pbs_capture_profile previous_profile = {width, height, capture_feature};
++    uint32_t previous_bitrate = requested_video_bitrate, previous_budget = requested_video_budget;
++    uint32_t previous_min_qp = requested_min_qp;
+     int changing_profile = 0;
+     if (live_request) pbs_h264_enable_profile_mask(pbs_ps5_legacy_resolution_modes(capture_firmware)?11u:PBS_CAPTURE_PROFILES_ALL);
+     /* Diagnostic native frame-rate enum: 0=30, 1=60; 2 is unverified.
+@@ -990,17 +1008,28 @@ avopen_cleanup:;
+       pbs_h264_profile_failed();
+       width = previous_profile.width; height = previous_profile.height;
+       capture_feature = previous_profile.feature;
++      requested_video_bitrate = previous_bitrate; requested_video_budget = previous_budget;
++      requested_min_qp = previous_min_qp;
+     }
+     changing_profile = 0;
+     int requested_height = 0;
+-    if (live_request && clear_ok && !ctx.asserted && pbs_h264_take_profile_request(&requested_height)) {
++    uint32_t next_bitrate = 0, next_min_qp = 0;
++    if (live_request && clear_ok && !ctx.asserted &&
++        pbs_h264_take_profile_request_ex(&requested_height, &next_bitrate, &next_min_qp)) {
+       pbs_capture_profile next;
+       if (!pbs_capture_profile_for_height(requested_height, &next)) {
+         /* A web/Studio selection is explicit, just like a command-line
+          * profile. Do not silently replace it with the automatic startup profile. */
+         automatic_resolution = 0;
+         previous_profile = (pbs_capture_profile){width, height, capture_feature};
++        previous_bitrate = requested_video_bitrate; previous_budget = requested_video_budget;
++        previous_min_qp = requested_min_qp;
+         width = next.width; height = next.height; capture_feature = next.feature;
++        if (next_bitrate) {
++          requested_video_bitrate = requested_video_budget = next_bitrate;
++          requested_min_qp = next_min_qp;
++          requested_rate_required = 1;
++        }
+         changing_profile = 1;
+       }
+     }
+diff --git a/payload/web/controller.js b/payload/web/controller.js
+index edfd45d..9032fb7 100644
+--- a/payload/web/controller.js
++++ b/payload/web/controller.js
+@@ -1,8 +1,8 @@
+ // SPDX-License-Identifier: GPL-3.0-or-later
+ (function(root){
+  'use strict';
+- const masks=[0x4000,0x2000,0x8000,0x1000,0x400,0x800,0x100,0x200,0x10000,8,2,4,0x10,0x40,0x80,0x20,0x20000,0x100000];
+- const bindings={Space:0x4000,KeyX:0x4000,KeyC:0x2000,KeyZ:0x8000,KeyV:0x1000,KeyQ:0x400,KeyE:0x800,KeyR:0x100,KeyF:0x200,Enter:8,Backspace:0x10000,KeyP:0x20000,KeyT:0x100000,ArrowUp:0x10,ArrowDown:0x40,ArrowLeft:0x80,ArrowRight:0x20};
++ const masks=[0x4000,0x2000,0x8000,0x1000,0x400,0x800,0x100,0x200,0x1,8,2,4,0x10,0x40,0x80,0x20,0x10000,0x100000];
++ const bindings={Space:0x4000,KeyX:0x4000,KeyC:0x2000,KeyZ:0x8000,KeyV:0x1000,KeyQ:0x400,KeyE:0x800,KeyR:0x100,KeyF:0x200,Enter:8,Backspace:0x1,KeyP:0x10000,KeyT:0x100000,ArrowUp:0x10,ArrowDown:0x40,ArrowLeft:0x80,ArrowRight:0x20};
+  const axisKeys=['KeyW','KeyA','KeyS','KeyD','KeyI','KeyJ','KeyK','KeyL'];
+  const neutral=()=>({buttons:0,lx:128,ly:128,rx:128,ry:128,l2:0,r2:0});
+  function axis(value){value=Number.isFinite(value)?Math.max(-1,Math.min(1,value)):0;return Math.abs(value)<0.12?128:Math.round((value+1)*127.5);}
+diff --git a/tests/http/controller.c b/tests/http/controller.c
+index 8ffd1d6..4285f96 100644
+--- a/tests/http/controller.c
++++ b/tests/http/controller.c
+@@ -99,6 +99,8 @@ int main(void) {
+   assert(!pbs_h264_server_start(18098, 1920, 1080, sps, sizeof sps, pps, sizeof pps));
+   request("GET", "/input/status", NULL, "", "", 200, 0);
+   assert(strstr(response, "\"supported\":true") && !strstr(response, "token"));
++  assert(strstr(response, "\"buttons_mask\":1310719") &&
++         strstr(response, "\"create_mask\":1") && strstr(response, "\"ps_mask\":65536"));
+   request("POST", "/input/connect", NULL, "", "", 403, 0);
+   request("POST", "/input/connect", "", "", "X-PBS-Input: 1\r\n", 403, 0);
+   request("POST", "/input/connect", "", "", "Transfer-Encoding: chunked\r\n", 400, 0);
+@@ -111,8 +113,14 @@ int main(void) {
+   request("POST", "/input/state", "00000000000000000000000000000000", "7,16384,128,128,128,128,0,0",
+           "", 403, 0);
+   request("POST", "/input/state", token, "7,16384,256,128,128,128,0,0", "", 400, 0);
+-  request("POST", "/input/state", token, "7,1,128,128,128,128,0,0", "", 400, 0);
++  request("POST", "/input/state", token, "7,2147483648,128,128,128,128,0,0", "", 400, 0);
+   request("POST", "/input/state", token, "7,16384,128,128,128,128,0,0,9", "", 400, 0);
++  request("POST", "/input/state", token, "5,1,128,128,128,128,0,0", "", 200, 0);
++  usleep(20000);
++  assert(snapshot().buttons == PBS_INPUT_CREATE_BUTTON);
++  request("POST", "/input/state", token, "6,65536,128,128,128,128,0,0", "", 200, 0);
++  usleep(20000);
++  assert(snapshot().buttons == PBS_INPUT_PS_BUTTON);
+   request("POST", "/input/state", token, "7,16384,128,128,128,128,0,0", "", 200, 1);
+   usleep(20000);
+   assert(snapshot().buttons == 0x4000);
+diff --git a/tests/http/profiles.c b/tests/http/profiles.c
+index 9ad0718..5d2088f 100644
+--- a/tests/http/profiles.c
++++ b/tests/http/profiles.c
+@@ -42,6 +42,8 @@ int main(void) {
+   pbs_h264_enable_profiles();
+   request("GET","/config.json",200);
+   assert(strstr(response,"[720,1080,1440,2160]"));
++  assert(strstr(response,"\"rate_control\":null"));
++  request("POST","/capture/profile?height=1080&bitrate=12000000&minqp=18",501);
+   request("POST","/capture/profile?height=999",400);
+   request("POST","/capture/profile?height=1080&extra=1",400);
+   pbs_h264_enable_profile_mask(11u);
+@@ -62,6 +64,55 @@ int main(void) {
+   pbs_h264_profile_failed();
+   request("GET","/config.json",200);
+   assert(strstr(response,"\"height\":1440")&&strstr(response,"\"profile_error\":true")&&strstr(response,"\"profile_error_height\":2160"));
++  assert(pbs_h264_take_restart_request());
++  pbs_h264_rate_control_ready(12000000,18);
++  request("GET","/config.json",200);
++  assert(strstr(response,"\"version\":1")&&strstr(response,"\"bitrate_bps\":12000000"));
++  const char *invalid[]={
++    "/capture/profile?height=1440&bitrate=999999&minqp=18",
++    "/capture/profile?height=1440&bitrate=100000001&minqp=18",
++    "/capture/profile?height=1440&bitrate=999999999999999999999999999999999&minqp=18",
++    "/capture/profile?height=1440&bitrate=-4294967295&minqp=18",
++    "/capture/profile?height=1440&bitrate=12000000&minqp=17",
++    "/capture/profile?height=1440&bitrate=12000000&minqp=36",
++    "/capture/profile?height=1440&bitrate=12000000",
++    "/capture/profile?height=1440&minqp=18",
++    "/capture/profile?height=1440&bitrate=12000000&minqp=18&extra=1"
++  };
++  for (unsigned i=0;i<sizeof invalid/sizeof invalid[0];++i) request("POST",invalid[i],400);
++  assert(!pbs_h264_take_restart_request());
++  request("POST","/capture/profile?height=1440&bitrate=18000000&minqp=20",200);
++  request("POST","/capture/profile?height=1080&bitrate=24000000&minqp=18",409);
++  request("POST","/record/start",409);
++  request("GET","/config.json",200);
++  assert(strstr(response,"\"bitrate_bps\":12000000")&&strstr(response,"\"requested_bitrate_bps\":18000000"));
++  assert(pbs_h264_take_restart_request());
++  uint32_t bitrate=0,qp=0;int height=0;
++  assert(pbs_h264_take_profile_request_ex(&height,&bitrate,&qp));
++  assert(height==1440&&bitrate==18000000&&qp==20);
++  assert(!pbs_h264_take_profile_request_ex(&height,&bitrate,&qp));
++  pbs_h264_rate_control_ready(bitrate,qp); /* Simulated positive native acceptance. */
++  assert(!pbs_h264_server_start(18092,2560,1440,sps,sizeof sps,pps,sizeof pps));
++  request("GET","/config.json",200);
++  assert(strstr(response,"\"profile_changing\":false")&&strstr(response,"\"profile_error\":false"));
++  assert(strstr(response,"\"bitrate_bps\":18000000")&&strstr(response,"\"min_qp_value\":20"));
++  request("POST","/capture/profile?height=1440&bitrate=24000000&minqp=22",200);
++  assert(pbs_h264_take_restart_request());
++  assert(pbs_h264_take_profile_request_ex(&height,&bitrate,&qp));
++  pbs_h264_profile_failed(); /* No acknowledgement of rejected native controls. */
++  request("GET","/config.json",200);
++  assert(strstr(response,"\"profile_error\":true")&&strstr(response,"\"bitrate_bps\":18000000"));
++  assert(strstr(response,"\"requested_bitrate_bps\":18000000")&&strstr(response,"\"min_qp_value\":20"));
++  request("POST","/capture/profile?height=1440&bitrate=18000000&minqp=20",200);
++  assert(!pbs_h264_take_restart_request());
++  request("GET","/config.json",200);
++  assert(strstr(response,"\"profile_error\":false"));
++  request("POST","/capture/profile?height=720",200); /* Legacy request preserves tuning. */
++  assert(pbs_h264_take_restart_request());
++  assert(pbs_h264_take_profile_request_ex(&height,&bitrate,&qp));
++  assert(height==720&&bitrate==18000000&&qp==20);
++  pbs_h264_rate_control_ready(bitrate,qp);
++  assert(!pbs_h264_server_start(18092,1280,720,sps,sizeof sps,pps,sizeof pps));
+   pbs_h264_server_stop();pbs_h264_server_wait();
+-  puts("Profile transitions, feature mapping, rollback state and recording conflicts verified");
++  puts("Profile/bitrate transactions, strict bounds, capability gates, rollback, legacy compatibility and recording conflicts verified");
+ }
+diff --git a/tests/input/controller.cjs b/tests/input/controller.cjs
+index 5c6a50c..fc61658 100644
+--- a/tests/input/controller.cjs
++++ b/tests/input/controller.cjs
+@@ -12,7 +12,13 @@ assert.equal(state.buttons,0x4100);assert.equal(state.lx,0);assert.equal(state.l
+ assert.equal(state.rx,128);assert.equal(state.ry,128);assert.equal(state.l2,128);
+ state=stateFor(pad,new Set(['KeyA','KeyD','KeyW','KeyF','KeyP','ArrowLeft']));
+ assert.equal(state.lx,128);assert.equal(state.ly,0);assert.equal(state.r2,255);
+-assert.equal(state.buttons&0x20000,0x20000);assert.equal(state.buttons&0x80,0x80);
++assert.equal(state.buttons&0x10000,0x10000);assert.equal(state.buttons&0x80,0x80);
++assert.equal(stateFor(null,new Set(['Backspace'])).buttons,0x1);
++assert.equal(stateFor(null,new Set(['KeyP'])).buttons,0x10000);
++const systemPad={connected:true,mapping:'standard',axes:[],buttons:Array.from({length:18},()=>({pressed:false,value:0}))};
++systemPad.buttons[8]={pressed:true,value:1};assert.equal(stateFor(systemPad).buttons,0x1);
++systemPad.buttons[8]={pressed:false,value:0};systemPad.buttons[16]={pressed:true,value:1};
++assert.equal(stateFor(systemPad).buttons,0x10000);
+ assert.deepEqual(stateFor({...pad,mapping:'unknown'}),neutral());
+ assert.deepEqual(stateFor({...pad,connected:false}),neutral());
+ assert.equal(encode(0xffffffff,neutral()),'4294967295,0,128,128,128,128,0,0');
+diff --git a/payload/src/common/http/profile_controls.h b/payload/src/common/http/profile_controls.h
+new file mode 100644
+--- /dev/null
++++ b/payload/src/common/http/profile_controls.h
+@@ -0,0 +1,38 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++#pragma once
++#include <errno.h>
++#include <stdint.h>
++#include <stdlib.h>
++#include <string.h>
++
++#define PBS_RATE_MIN_BPS 1000000u
++#define PBS_RATE_MAX_BPS 100000000u
++#define PBS_RATE_MIN_QP 18u
++#define PBS_RATE_MAX_QP 35u
++typedef struct { int height, has_rate; uint32_t bitrate, min_qp; } pbs_profile_request;
++
++/* Strict decimal parsing; reject overflow, signs, missing fields and trailing query data. */
++static int pbs_profile_decimal(const char **cursor, const char *key, uint32_t maximum, uint32_t *value) {
++  size_t size = strlen(key);
++  if (strncmp(*cursor, key, size)) return -1;
++  const char *number = *cursor + size;
++  if (*number < '0' || *number > '9') return -1;
++  char *end = NULL;
++  errno = 0;
++  unsigned long parsed = strtoul(number, &end, 10);
++  if (errno || end == number || parsed > maximum) return -1;
++  *value = (uint32_t)parsed; *cursor = end;
++  return 0;
++}
++static int pbs_profile_parse(const char *path, pbs_profile_request *request) {
++  uint32_t height = 0;
++  memset(request, 0, sizeof *request);
++  if (pbs_profile_decimal(&path, "/capture/profile?height=", 2160, &height)) return -1;
++  request->height = (int)height;
++  if (!*path) return 0;
++  if (pbs_profile_decimal(&path, "&bitrate=", PBS_RATE_MAX_BPS, &request->bitrate) ||
++      pbs_profile_decimal(&path, "&minqp=", PBS_RATE_MAX_QP, &request->min_qp) || *path ||
++      request->bitrate < PBS_RATE_MIN_BPS || request->min_qp < PBS_RATE_MIN_QP) return -1;
++  request->has_rate = 1;
++  return 0;
++}

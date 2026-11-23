@@ -1,0 +1,5 @@
+[
+  { "afterSeconds": 0, "videoMbps": 0, "videoDelayMs": 0 },
+  { "afterSeconds": 25, "videoMbps": 5, "videoDelayMs": 80 },
+  { "afterSeconds": 65, "videoMbps": 0, "videoDelayMs": 0 }
+]

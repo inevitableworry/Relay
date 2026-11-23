@@ -1,0 +1,12 @@
+build/
+*.elf
+*.nro
+*.nacp
+*.map
+tools/node_modules/
+upstream/
+romfs/
+icon.jpg
+exefs-dev/
+main.npdm
+relay-switch1-exefs-dev.nsp
